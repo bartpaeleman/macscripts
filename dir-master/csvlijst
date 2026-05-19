@@ -10,6 +10,7 @@ SHOW_TYPE=false
 SHOW_SIZE=false
 SHOW_PATH=false
 FILTER_HIDDEN=false
+MUZIEK_DATABASE=false
 UITVOER_BESTAND="output.csv"
 BRONMAP="$(pwd)"
 
@@ -21,6 +22,7 @@ while [[ $# -gt 0 ]]; do
         -s) SHOW_SIZE=true; SHOW_ALL=false ;;
         -p) SHOW_PATH=true; SHOW_ALL=false ;;
         -f) FILTER_HIDDEN=true ;;
+        -m) MUZIEK_DATABASE=true; SHOW_ALL=false ;;
         -o)
             if [[ -n "${2:-}" ]]; then
                 UITVOER_BESTAND="$2"
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -s    Toon GROOTTE BESTAND"
             echo "  -p    Toon PATH"
             echo "  -f    Filter onzichtbare bestanden eruit"
+            echo "  -m    Muziek database modus (ARTIEST, TITEL, GROOTTE, MAP...)"
             echo "  -o    Uitvoerbestand (standaard: output.csv)"
             echo "  -d    Bronmap (standaard: huidige map)"
             exit 0
@@ -58,6 +61,31 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+# --- Pad correcties ---
+# Verwerk situaties waarbij -p aan het einde van een string is geplakt of backslashes voorkomen
+if [[ ! -d "$BRONMAP" ]]; then
+    if [[ "$BRONMAP" == *-p ]]; then
+        test_map="${BRONMAP%-p}"
+        test_map_clean="${test_map//\\ / }"
+        if [[ -d "$test_map_clean" ]]; then
+            BRONMAP="$test_map_clean"
+            SHOW_PATH=true
+            SHOW_ALL=false
+        elif [[ -d "$test_map" ]]; then
+            BRONMAP="$test_map"
+            SHOW_PATH=true
+            SHOW_ALL=false
+        fi
+    fi
+
+    if [[ ! -d "$BRONMAP" ]]; then
+        test_map_clean="${BRONMAP//\\ / }"
+        if [[ -d "$test_map_clean" ]]; then
+            BRONMAP="$test_map_clean"
+        fi
+    fi
+fi
 
 if $SHOW_ALL; then
     SHOW_NAAM=true
@@ -99,43 +127,106 @@ to_csv() {
 }
 
 {
-    # Bouw de header
-    HEADER=()
-    $SHOW_NAAM && HEADER+=("NAAM BESTAND")
-    $SHOW_TYPE && HEADER+=("TYPE BESTAND")
-    $SHOW_SIZE && HEADER+=("GROOTTE BESTAND")
-    $SHOW_PATH && HEADER+=("PATH")
+    if $MUZIEK_DATABASE; then
+        # Bereken maximale directory diepte voor dynamische kolommen
+        max_depth=0
+        while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            dir_part="$(dirname "${f#$BRONMAP/}")"
+            if [[ "$dir_part" != "." && -n "$dir_part" ]]; then
+                depth=$(awk -F"/" '{print NF}' <<< "$dir_part")
+                if [[ $depth -gt $max_depth ]]; then
+                    max_depth=$depth
+                fi
+            fi
+        done < "$TMP_FILE"
 
-    to_csv "${HEADER[@]}"
+        HEADER=("ARTIEST" "TITEL" "GROOTTE")
+        for ((i=1; i<=max_depth; i++)); do
+            HEADER+=("MAP $i")
+        done
+        to_csv "${HEADER[@]}"
 
-    while IFS= read -r bestand; do
-        [[ -z "$bestand" ]] && continue
+        while IFS= read -r bestand; do
+            [[ -z "$bestand" ]] && continue
 
-        ROW=()
+            ROW=()
+            bestandsnaam=$(basename "$bestand")
+            base_naam="${bestandsnaam%.*}"
 
-        bestandsnaam=$(basename "$bestand")
+            if [[ "$base_naam" == *" - "* ]]; then
+                artiest="${base_naam%% - *}"
+                titel="${base_naam#* - }"
+            else
+                artiest="Onbekend"
+                titel="$base_naam"
+            fi
 
-        # Type (extensie) bepalen
-        if [[ "$bestandsnaam" == *.* ]] && [[ "$bestandsnaam" != .* || "$bestandsnaam" == *.*.* ]]; then
-            type="${bestandsnaam##*.}"
-        else
-            type=""
-        fi
+            # Grootte bepalen
+            if stat --version 2>/dev/null | grep -q 'GNU'; then
+                grootte=$(stat -c %s "$bestand")
+            else
+                grootte=$(stat -f %z "$bestand")
+            fi
 
-        # Grootte (macOS en Linux compatibel)
-        if stat --version 2>/dev/null | grep -q 'GNU'; then
-            grootte=$(stat -c %s "$bestand")
-        else
-            grootte=$(stat -f %z "$bestand")
-        fi
+            ROW+=("$artiest" "$titel" "$grootte")
 
-        $SHOW_NAAM && ROW+=("$bestandsnaam")
-        $SHOW_TYPE && ROW+=("$type")
-        $SHOW_SIZE && ROW+=("$grootte")
-        $SHOW_PATH && ROW+=("$bestand")
+            dir_part="$(dirname "${bestand#$BRONMAP/}")"
+            maps=()
+            if [[ "$dir_part" != "." && -n "$dir_part" ]]; then
+                IFS='/' read -ra maps <<< "$dir_part"
+            fi
 
-        to_csv "${ROW[@]}"
-    done < "$TMP_FILE"
+            # Vul aan tot max_depth
+            for ((i=0; i<max_depth; i++)); do
+                if [[ $i -lt ${#maps[@]} ]]; then
+                    ROW+=("${maps[$i]}")
+                else
+                    ROW+=("")
+                fi
+            done
+
+            to_csv "${ROW[@]}"
+        done < "$TMP_FILE"
+    else
+        # Bouw de header
+        HEADER=()
+        $SHOW_NAAM && HEADER+=("NAAM BESTAND")
+        $SHOW_TYPE && HEADER+=("TYPE BESTAND")
+        $SHOW_SIZE && HEADER+=("GROOTTE BESTAND")
+        $SHOW_PATH && HEADER+=("PATH")
+
+        to_csv "${HEADER[@]}"
+
+        while IFS= read -r bestand; do
+            [[ -z "$bestand" ]] && continue
+
+            ROW=()
+
+            bestandsnaam=$(basename "$bestand")
+
+            # Type (extensie) bepalen
+            if [[ "$bestandsnaam" == *.* ]] && [[ "$bestandsnaam" != .* || "$bestandsnaam" == *.*.* ]]; then
+                type="${bestandsnaam##*.}"
+            else
+                type=""
+            fi
+
+            # Grootte (macOS en Linux compatibel)
+            if stat --version 2>/dev/null | grep -q 'GNU'; then
+                grootte=$(stat -c %s "$bestand")
+            else
+                grootte=$(stat -f %z "$bestand")
+            fi
+
+            $SHOW_NAAM && ROW+=("$bestandsnaam")
+            $SHOW_TYPE && ROW+=("$type")
+            $SHOW_SIZE && ROW+=("$grootte")
+            $SHOW_PATH && ROW+=("$bestand")
+
+            to_csv "${ROW[@]}"
+        done < "$TMP_FILE"
+    fi
 } > "$UITVOER_BESTAND"
 
 echo "✅ CSV bestand aangemaakt: $UITVOER_BESTAND"

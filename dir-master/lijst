@@ -99,6 +99,29 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
+# --- Pad correcties ---
+# Verwerk situaties waarbij -p aan het einde van een string is geplakt of backslashes voorkomen
+if [[ ! -d "$BRONMAP" ]]; then
+    if [[ "$BRONMAP" == *-p ]]; then
+        test_map="${BRONMAP%-p}"
+        test_map_clean="${test_map//\\ / }"
+        if [[ -d "$test_map_clean" ]]; then
+            BRONMAP="$test_map_clean"
+            INCLUDE_PATHS=true
+        elif [[ -d "$test_map" ]]; then
+            BRONMAP="$test_map"
+            INCLUDE_PATHS=true
+        fi
+    fi
+
+    if [[ ! -d "$BRONMAP" ]]; then
+        test_map_clean="${BRONMAP//\\ / }"
+        if [[ -d "$test_map_clean" ]]; then
+            BRONMAP="$test_map_clean"
+        fi
+    fi
+fi
+
 # --- Controles ---
 if [[ ! -d "$BRONMAP" ]]; then
     echo "❌ Bronmap bestaat niet: $BRONMAP"
