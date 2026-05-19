@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# === Directory naar CSV Generator ===
+
+set -euo pipefail
+
+# Standaardwaarden
+SHOW_ALL=true
+SHOW_NAAM=false
+SHOW_TYPE=false
+SHOW_SIZE=false
+SHOW_PATH=false
+FILTER_HIDDEN=false
+UITVOER_BESTAND="output.csv"
+BRONMAP="$(pwd)"
+
+# Argumenten verwerken
+while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+        -n) SHOW_NAAM=true; SHOW_ALL=false ;;
+        -t) SHOW_TYPE=true; SHOW_ALL=false ;;
+        -s) SHOW_SIZE=true; SHOW_ALL=false ;;
+        -p) SHOW_PATH=true; SHOW_ALL=false ;;
+        -f) FILTER_HIDDEN=true ;;
+        -o)
+            if [[ -n "${2:-}" ]]; then
+                UITVOER_BESTAND="$2"
+                shift
+            else
+                echo "❌ -o vereist een bestandsnaam/locatie"
+                exit 1
+            fi
+            ;;
+        -d)
+            if [[ -n "${2:-}" ]]; then
+                BRONMAP="$2"
+                shift
+            else
+                echo "❌ -d vereist een map"
+                exit 1
+            fi
+            ;;
+        -h|--help)
+            echo "Gebruik: $0 [opties]"
+            echo "Opties:"
+            echo "  -n    Toon NAAM BESTAND"
+            echo "  -t    Toon TYPE BESTAND"
+            echo "  -s    Toon GROOTTE BESTAND"
+            echo "  -p    Toon PATH"
+            echo "  -f    Filter onzichtbare bestanden eruit"
+            echo "  -o    Uitvoerbestand (standaard: output.csv)"
+            echo "  -d    Bronmap (standaard: huidige map)"
+            exit 0
+            ;;
+        *)
+            echo "❌ Onbekende optie: ${1:-}"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if $SHOW_ALL; then
+    SHOW_NAAM=true
+    SHOW_TYPE=true
+    SHOW_SIZE=true
+    SHOW_PATH=true
+fi
+
+if [[ ! -d "$BRONMAP" ]]; then
+    echo "❌ Bronmap bestaat niet: $BRONMAP"
+    exit 1
+fi
+
+# Tijdelijk bestand voor find resultaten
+TMP_FILE=$(mktemp -t lijst_csv.XXXXXX)
+trap 'rm -f "$TMP_FILE"' EXIT INT TERM
+
+# Zoek bestanden
+if $FILTER_HIDDEN; then
+    find "$BRONMAP" -type f ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
+else
+    find "$BRONMAP" -type f | sort > "$TMP_FILE"
+fi
+
+# Functie om array naar csv regel te converteren
+to_csv() {
+    local first=true
+    for item in "$@"; do
+        # Escape quotes en omsluit met quotes
+        item=$(echo "$item" | sed 's/"/""/g')
+        if $first; then
+            printf '"%s"' "$item"
+            first=false
+        else
+            printf ',"%s"' "$item"
+        fi
+    done
+    printf '\n'
+}
+
+{
+    # Bouw de header
+    HEADER=()
+    $SHOW_NAAM && HEADER+=("NAAM BESTAND")
+    $SHOW_TYPE && HEADER+=("TYPE BESTAND")
+    $SHOW_SIZE && HEADER+=("GROOTTE BESTAND")
+    $SHOW_PATH && HEADER+=("PATH")
+
+    to_csv "${HEADER[@]}"
+
+    while IFS= read -r bestand; do
+        [[ -z "$bestand" ]] && continue
+
+        ROW=()
+
+        bestandsnaam=$(basename "$bestand")
+
+        # Type (extensie) bepalen
+        if [[ "$bestandsnaam" == *.* ]] && [[ "$bestandsnaam" != .* || "$bestandsnaam" == *.*.* ]]; then
+            type="${bestandsnaam##*.}"
+        else
+            type=""
+        fi
+
+        # Grootte (macOS en Linux compatibel)
+        if stat --version 2>/dev/null | grep -q 'GNU'; then
+            grootte=$(stat -c %s "$bestand")
+        else
+            grootte=$(stat -f %z "$bestand")
+        fi
+
+        $SHOW_NAAM && ROW+=("$bestandsnaam")
+        $SHOW_TYPE && ROW+=("$type")
+        $SHOW_SIZE && ROW+=("$grootte")
+        $SHOW_PATH && ROW+=("$bestand")
+
+        to_csv "${ROW[@]}"
+    done < "$TMP_FILE"
+} > "$UITVOER_BESTAND"
+
+echo "✅ CSV bestand aangemaakt: $UITVOER_BESTAND"
