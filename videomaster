@@ -7,6 +7,13 @@
 
 # Interactive scripts should generally avoid set -e to prevent menu crashes
 # However, we can use set -u to catch unbound variables
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 set -u
 
 # Colors

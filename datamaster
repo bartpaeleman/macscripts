@@ -1,6 +1,13 @@
 #!/bin/bash
 # Master Wrapper Script for DATA tools
 
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 DATA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/DATA" && pwd)"
 
 exec "$DATA_DIR/data-master.sh" "$@"

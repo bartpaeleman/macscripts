@@ -1,6 +1,13 @@
 #!/bin/bash
 # Master Wrapper Script for INTEL tools
 
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 INTEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/INTEL" && pwd)"
 
 exec "$INTEL_DIR/threat-intel.sh" "$@"

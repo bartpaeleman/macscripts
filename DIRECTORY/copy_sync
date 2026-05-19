@@ -1,0 +1,104 @@
+#!/bin/bash
+# ============================================================
+# COPY & SYNC TOOL
+# Sync of kopieer bestanden/mappen via rsync
+# ============================================================
+
+set -u
+
+# Colors
+GREEN='\033[1;32m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'
+
+show_help() {
+    echo -e "${CYAN}=== Copy & Sync Tool ===${NC}"
+    echo "Gebruik: $0 [opties]"
+    echo ""
+    echo "Een interactief script om bestanden en mappen te kopiëren"
+    echo "of te synchroniseren met behulp van rsync."
+    echo ""
+    echo "Opties:"
+    echo "  -h, --help    Toon dit helpbericht"
+    echo ""
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
+echo -e "${CYAN}================================================${NC}"
+echo -e "              ${CYAN}COPY & SYNC TOOL${NC}"
+echo -e "${CYAN}================================================${NC}"
+
+# Vraag om de bronmap
+echo -e "${YELLOW}Geef de bronmap op (gebruik Tab voor autocomplete):${NC}"
+read -e -p "Bron: " source_dir
+
+# Correct spacing/escapes as per memory
+source_dir="${source_dir//\\ / }"
+# Remove trailing slash to be safe with rsync, we'll append it later if needed
+source_dir="${source_dir%/}"
+
+if [ ! -d "$source_dir" ] && [ ! -f "$source_dir" ]; then
+    echo -e "${RED}Fout: Bron '$source_dir' bestaat niet.${NC}"
+    exit 1
+fi
+
+# Vraag om de doelmap
+echo -e "\n${YELLOW}Geef de doelmap op (gebruik Tab voor autocomplete):${NC}"
+read -e -p "Doel: " target_dir
+
+target_dir="${target_dir//\\ / }"
+target_dir="${target_dir%/}"
+
+if [ -z "$target_dir" ]; then
+    echo -e "${RED}Fout: Doel mag niet leeg zijn.${NC}"
+    exit 1
+fi
+
+if [ ! -d "$target_dir" ]; then
+    echo -e "${YELLOW}Doelmap bestaat nog niet. Wordt aangemaakt...${NC}"
+    mkdir -p "$target_dir"
+fi
+
+# Kies de actie
+echo -e "\n${CYAN}Kies een actie:${NC}"
+echo "1) Kopieer (Nieuwe of gewijzigde bestanden overzetten, niets wissen op doel)"
+echo "2) Synchroniseer (Doel exact gelijk maken aan bron, inclusief WISSEN van bestanden op doel die niet op bron staan)"
+echo "X) Annuleren"
+
+read -p "Keuze: " choice
+
+rsync_flags="-avh --progress"
+
+case "$choice" in
+    1)
+        echo -e "\n${GREEN}Modus: Kopiëren${NC}"
+        ;;
+    2)
+        echo -e "\n${RED}Modus: Synchroniseren (--delete wordt toegevoegd)${NC}"
+        rsync_flags="$rsync_flags --delete"
+        ;;
+    [xX])
+        echo -e "${YELLOW}Geannuleerd.${NC}"
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Ongeldige keuze. Geannuleerd.${NC}"
+        exit 1
+        ;;
+esac
+
+# Construct rsync command
+# Notice we append '/' to source to copy contents into target_dir
+echo -e "\n${YELLOW}Uitvoeren: rsync $rsync_flags \"$source_dir/\" \"$target_dir/\"${NC}"
+echo -e "Druk op Enter om te starten of Ctrl+C om te annuleren..."
+read -r
+
+rsync $rsync_flags "$source_dir/" "$target_dir/"
+
+echo -e "\n${GREEN}✅ Actie voltooid!${NC}"
