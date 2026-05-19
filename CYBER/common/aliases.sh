@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shell aliases and wrappers for cyber-master toolset
+# Shell aliases and wrappers for CYBER toolset
 
 CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_WRAPPER="$CYBER_MASTER_DIR/common/run_python.sh"

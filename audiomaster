@@ -1,0 +1,45 @@
+#!/bin/bash
+# Master Wrapper Script for AUDIO tools
+
+AUDIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/AUDIO" && pwd)"
+
+# Colors
+GREEN='\033[1;32m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'
+
+pause() {
+    echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+    read -r
+}
+
+while true; do
+    clear
+    echo -e "${CYAN}================================================${NC}"
+    echo -e "         ${CYAN}AUDIO MASTER CONTROL PANEL${NC}"
+    echo -e "${CYAN}================================================${NC}"
+    echo -e "${GREEN}Available tools:${NC}"
+    echo "1) fixaac"
+    echo -e "\n${YELLOW}X) Exit${NC}"
+    echo -e "${CYAN}================================================${NC}"
+
+    read -p "Select action: " choice
+
+    case "$choice" in
+        1)
+            echo -e "${GREEN}Running fixaac...${NC}"
+            "$AUDIO_DIR/fixaac"
+            pause
+            ;;
+        [xX])
+            echo -e "${GREEN}Exiting...${NC}"
+            break
+            ;;
+        *)
+            echo -e "${RED}Invalid choice.${NC}"
+            pause
+            ;;
+    esac
+done
