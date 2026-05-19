@@ -1,0 +1,403 @@
+#!/usr/bin/env bash
+# === Muziek Metadata Updater (Huidige Map Batch) ===
+# Zoekt informatie online en schrijft naar metadata voor alle MP3/MP4/M4A 
+# bestanden RECURSIEF in de map waar het wordt uitgevoerd.
+
+# Gebruik set -E om fouten in functies op te vangen
+set -Eu pipefail
+
+# Standaardwaarden
+# De bronmap is nu ALTIJD de huidige map
+BRONMAP="$(pwd)" 
+VERBOSE=false
+DRY_RUN=false
+BACKUP=true
+
+# API endpoints
+MUSICBRAINZ_API="https://musicbrainz.org/ws/2"
+
+toon_help() {
+    cat << EOF
+Gebruik: $0 [opties]
+
+Zoekt muziekinformatie en schrijft naar metadata van ALLE .mp3, .mp4, en .m4a 
+bestanden RECURSIEF in de huidige map en submappen. Artiest en titel worden 
+afgeleid uit de bestandsnaam.
+
+Opties:
+  --no-backup         Maak geen backup van bestanden
+  --dry-run           Toon alleen wat er zou gebeuren
+  -v, --verbose       Toon gedetailleerde informatie
+  -h, --help          Toon deze help
+
+De tool probeert artiest en titel af te leiden uit de bestandsnaam.
+Ondersteunde formaten: MP3, MP4, M4A
+
+Voorbeelden:
+  # Voer uit in de map die je wilt verwerken
+  ./musicinfo --dry-run -v
+  ./musicinfo
+EOF
+}
+
+# --- Controleer benodigde tools ---
+check_dependencies() {
+    local missing=()
+    
+    if ! command -v jq &> /dev/null; then
+        missing+=("jq")
+    fi
+    
+    if ! command -v curl &> /dev/null; then
+        missing+=("curl")
+    fi
+    
+    # Check voor metadata tools
+    if ! command -v eyeD3 &> /dev/null && ! command -v id3v2 &> /dev/null; then
+        if ! command -v ffmpeg &> /dev/null; then
+            missing+=("eyeD3 OF id3v2 OF ffmpeg")
+        fi
+    fi
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "❌ Benodigde tools niet gevonden: ${missing[*]}"
+        echo "💡 Installeer met:"
+        echo "   brew install jq curl eye-d3"  # of ffmpeg
+        exit 1
+    fi
+}
+
+# --- Zoek artiest informatie op MusicBrainz ---
+zoek_artiest_info() {
+    local artiest="$1"
+    local titel="$2"
+    
+    # URL encode
+    artiest_encoded=$(perl -MURI::Escape -e 'print uri_escape($ARGV[0])' "$artiest")
+    titel_encoded=$(perl -MURI::Escape -e 'print uri_escape($ARGV[0])' "$titel")
+    
+    # Zoek artiest op MusicBrainz
+    if $VERBOSE; then echo "      -> Zoeken naar artiest: $artiest_encoded"; fi
+    response=$(curl -s -H "User-Agent: MuziekMetadataUpdater/1.0" \
+        "$MUSICBRAINZ_API/artist/?query=artist:\"$artiest_encoded\"&fmt=json" || echo "{}")
+    
+    artiest_id=$(echo "$response" | jq -r '.artists[0].id // empty' 2>/dev/null)
+    
+    if [[ -z "$artiest_id" ]]; then
+        echo "   ❌ Geen artiest gevonden: $artiest"
+        return 1
+    fi
+    
+    # Haal artiest details op
+    if $VERBOSE; then echo "      -> Ophalen artiest details: $artiest_id"; fi
+    artiest_info=$(curl -s -H "User-Agent: MuziekMetadataUpdater/1.0" \
+        "$MUSICBRAINZ_API/artist/$artiest_id?inc=genres+release-groups&fmt=json")
+    
+    # Parse informatie
+    artiest_naam=$(echo "$artiest_info" | jq -r '.name // empty')
+    land=$(echo "$artiest_info" | jq -r '.country // empty')
+    
+    # Haal genres op
+    genres=$(echo "$artiest_info" | jq -r '.genres[0:3] | map(.name) | join(", ") // "Unknown"')
+    
+    # Zoek release informatie voor de titel
+    if $VERBOSE; then echo "      -> Zoeken naar titel: $titel_encoded"; fi
+    release_response=$(curl -s -H "User-Agent: MuziekMetadataUpdater/1.0" \
+        "$MUSICBRAINZ_API/release-group/?query=artist:\"$artiest_encoded\"+AND+release:\"$titel_encoded\"&fmt=json")
+    
+    release_date=$(echo "$release_response" | jq -r '.["release-groups"][0]."first-release-date" // empty')
+    jaartal=$(echo "$release_date" | cut -d'-' -f1)
+    album=$(echo "$release_response" | jq -r '.["release-groups"][0].title // empty')
+    
+    # Return alle informatie
+    echo "$artiest_naam|$titel|${jaartal:-}|${genres}|${land:-}|${album:-}"
+}
+
+# --- Update MP3 metadata met eyeD3, id3v2 of ffmpeg ---
+update_mp3_metadata() {
+    local bestand="$1"
+    local artiest="$2"
+    local titel="$3"
+    local jaartal="$4"
+    local genre="$5"
+    local album="$6"
+    
+    if command -v eyeD3 &> /dev/null; then
+        # Gebruik eyeD3
+        local eyeD3_cmd=("eyeD3" "--encoding=utf8")
+        
+        [[ -n "$artiest" ]] && eyeD3_cmd+=("--artist=\"$artiest\"")
+        [[ -n "$titel" ]] && eyeD3_cmd+=("--title=\"$titel\"")
+        [[ -n "$jaartal" ]] && eyeD3_cmd+=("--year=$jaartal")
+        [[ -n "$genre" ]] && eyeD3_cmd+=("--genre=\"$genre\"")
+        [[ -n "$album" ]] && eyeD3_cmd+=("--album=\"$album\"")
+        
+        eyeD3_cmd+=("\"$bestand\"")
+        
+        if $DRY_RUN; then
+            echo "   [DRY-RUN] ${eyeD3_cmd[*]}"
+            return 0
+        else
+            eval "${eyeD3_cmd[*]}" 2>/dev/null && return 0
+        fi
+    fi
+    
+    # Fallback naar id3v2
+    if command -v id3v2 &> /dev/null; then
+        if $DRY_RUN; then
+            echo "   [DRY-RUN] id3v2 --artist \"$artiest\" --song \"$titel\" --year \"$jaartal\" --genre \"$genre\" --album \"$album\" \"$bestand\""
+            return 0
+        else
+            id3v2 --artist "$artiest" --song "$titel" --year "$jaartal" --genre "$genre" --album "$album" "$bestand" 2>/dev/null && return 0
+        fi
+    fi
+    
+    # Fallback naar ffmpeg (wordt ook gebruikt voor MP4, zie hieronder)
+    if command -v ffmpeg &> /dev/null; then
+        update_mp4_metadata "$bestand" "$artiest" "$titel" "$jaartal" "$genre" "$album"
+        return $?
+    fi
+    
+    return 1
+}
+
+# --- Update MP4/M4A metadata met ffmpeg ---
+update_mp4_metadata() {
+    local bestand="$1"
+    local artiest="$2"
+    local titel="$3"
+    local jaartal="$4"
+    local genre="$5"
+    local album="$6"
+    
+    if command -v ffmpeg &> /dev/null; then
+        local temp_file="${bestand}.temp"
+        local ffmpeg_args=""
+        [[ -n "$artiest" ]] && ffmpeg_args+="-metadata artist=\"$artiest\" "
+        [[ -n "$titel" ]] && ffmpeg_args+="-metadata title=\"$titel\" "
+        [[ -n "$jaartal" ]] && ffmpeg_args+="-metadata date=\"$jaartal\" "
+        [[ -n "$genre" ]] && ffmpeg_args+="-metadata genre=\"$genre\" "
+        [[ -n "$album" ]] && ffmpeg_args+="-metadata album=\"$album\" "
+        
+        # mp4/m4a moeten (meestal) worden geconverteerd, gebruik -c copy voor audio stream
+        local ffmpeg_cmd="ffmpeg -i \"$bestand\" -c copy -map 0:a? ${ffmpeg_args} \"$temp_file\""
+        
+        if $DRY_RUN; then
+            echo "   [DRY-RUN] ${ffmpeg_cmd} && mv \"$temp_file\" \"$bestand\""
+            return 0
+        else
+            if eval "$ffmpeg_cmd" 2>/dev/null; then
+                mv "$temp_file" "$bestand"
+                return 0
+            fi
+            [[ -f "$temp_file" ]] && rm -f "$temp_file"
+        fi
+    fi
+    
+    return 1
+}
+
+# --- Maak backup van bestand ---
+maak_backup() {
+    local bestand="$1"
+    # Maak de backup map binnen de bronmap (relatief pad)
+    local backup_dir="${BRONMAP}/backups" 
+    
+    mkdir -p "$backup_dir"
+    # Gebruik de volledige naam van het bestand in de backup
+    local backup_naam="${backup_dir}/$(basename "$bestand").backup.$(date +%Y%m%d_%H%M%S)"
+    
+    if $DRY_RUN; then
+        echo "   [DRY-RUN] cp \"$bestand\" \"$backup_naam\""
+    else
+        cp "$bestand" "$backup_naam"
+        echo "   💾 Backup: $(basename "$backup_naam")"
+    fi
+}
+
+# --- Hoofdscript ---
+
+# --- Opties parsen (alleen dry-run, no-backup, verbose, help) ---
+while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --no-backup)
+            BACKUP=false
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        -h|--help)
+            toon_help
+            exit 0
+            ;;
+        *)
+            echo "❌ Onbekende optie: ${1:-}"
+            toon_help
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# --- Start verwerking ---
+
+# Controles
+if [[ ! -d "$BRONMAP" ]]; then
+    echo "❌ Huidige map bestaat niet: $BRONMAP"
+    exit 1
+fi
+
+check_dependencies
+
+echo "=== Muziek Metadata Updater (Huidige Map Batch) ==="
+echo "📁 Bronmap: $BRONMAP (Huidige map)"
+echo "🔗 API: MusicBrainz"
+$DRY_RUN && echo "🔍 DRY-RUN MODE - geen wijzigingen worden aangebracht"
+echo ""
+
+# Maak backup directory indien nodig
+if $BACKUP && ! $DRY_RUN; then
+    backup_dir="$BRONMAP/backups"
+    mkdir -p "$backup_dir"
+    echo "💾 Backups worden opgeslagen in: $backup_dir"
+fi
+
+# --- OPLOSSING VOOR DE LUS/INLEES PROBLEMATIEK ---
+
+OLD_IFS=$IFS
+IFS=$'\n' # Pas de Internal Field Separator aan naar een newline
+
+# Verzamel alle bestanden in een array. 'find' geeft volledige paden (inclusief ./ indien uitgevoerd in BRONMAP)
+# We gebruiken -print i.p.v. -print0
+bestanden=($(find "$BRONMAP" -type f \( -iname "*.mp3" -o -iname "*.mp4" -o -iname "*.m4a" \) ! -name ".*" -print))
+
+# Herstel IFS
+IFS=$OLD_IFS
+
+teller=${#bestanden[@]}
+
+echo "📊 Gevonden bestanden: $teller"
+echo ""
+
+if [[ "$teller" -eq 0 ]]; then
+    echo "💡 Geen .mp3, .mp4 of .m4a bestanden gevonden in: $BRONMAP"
+    exit 0
+fi
+
+success_teller=0
+
+# Loop over de gevonden bestanden
+for bestand in "${bestanden[@]}"; do
+    
+    # Korte validatie
+    if [[ ! -f "$bestand" ]]; then
+        echo "   ❌ Bestand bestaat niet (padprobleem): $bestand"
+        continue
+    fi
+    
+    # Verwijder de voorloop './' als find die gaf (omdat we find met '.' draaien)
+    if [[ "$bestand" == "./"* ]]; then
+        bestand="${bestand#./}"
+    fi
+
+    bestand_naam=$(basename "$bestand")
+    echo "🔍 Verwerken: $bestand_naam"
+    
+    # Haal de bestandsnaam zonder extensie op
+    basis_naam="${bestand_naam%.*}"
+    
+    # Probeer artiest en titel af te leiden
+    if [[ "$basis_naam" == *" - "* ]]; then
+        artiest="${basis_naam%% - *}"
+        titel="${basis_naam#* - }"
+    else
+        artiest=""
+        titel="$basis_naam"
+    fi
+    
+    # Trim whitespace en vervang eventuele underscores/punten door spaties
+    artiest=$(echo "$artiest" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[._]/ /g')
+    titel=$(echo "$titel" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[._]/ /g')
+    
+    # Filter eventuele tracknummers
+    titel=$(echo "$titel" | sed 's/^[0-9]\+ - //; s/^[0-9]\+\.[[:space:]]*//')
+    if [[ -z "$artiest" ]]; then
+        if [[ "$titel" == *" - "* ]]; then
+            artiest="${titel%% - *}"
+            titel="${titel#* - }"
+        fi
+    fi
+    
+    # Eenvoudige validatie
+    if [[ -z "$titel" ]]; then
+        echo "   ❌ Kon artiest/titel niet afleiden uit bestandsnaam."
+        echo ""
+        continue
+    fi
+    
+    echo "   🔎 Afgeleid: Artiest: '${artiest:-Onbekend}', Titel: '$titel'"
+
+    # Zoek informatie op
+    if info=$(zoek_artiest_info "$artiest" "$titel" 2>/dev/null); then
+        
+        IFS='|' read -r found_artiest found_titel jaartal genre land album <<< "$info"
+        
+        echo "   ✅ Info gevonden:"
+        echo "      🎵 Artiest: $found_artiest"
+        echo "      📀 Titel: $found_titel"
+        [[ -n "$jaartal" ]] && echo "      📅 Jaar: $jaartal"
+        [[ -n "$genre" ]] && echo "      🎸 Genre: $genre"
+        [[ -n "$album" ]] && echo "      💿 Album: $album"
+        
+        # Maak backup
+        if $BACKUP; then
+            maak_backup "$bestand" "$BRONMAP"
+        fi
+        
+        # Update metadata op basis van bestandstype
+        extensie="${bestand##*.}"
+        case "${extensie,,}" in
+            mp3)
+                if update_mp3_metadata "$bestand" "$found_artiest" "$found_titel" "$jaartal" "$genre" "$album"; then
+                    echo "   ✅ MP3 metadata bijgewerkt"
+                    ((success_teller++))
+                else
+                    echo "   ❌ Kon MP3 metadata niet updaten"
+                fi
+                ;;
+            mp4|m4a)
+                if update_mp4_metadata "$bestand" "$found_artiest" "$found_titel" "$jaartal" "$genre" "$album"; then
+                    echo "   ✅ MP4/M4A metadata bijgewerkt"
+                    ((success_teller++))
+                else
+                    echo "   ❌ Kon MP4/M4A metadata niet updaten"
+                fi
+                ;;
+            *)
+                echo "   ❌ Niet-ondersteund bestandsformaat: $extensie"
+                ;;
+        esac
+        
+    else
+        echo "   ❌ Geen informatie gevonden voor: ${artiest:-} - $titel"
+    fi
+    
+    echo ""
+    # Even wachten om de API niet te overloaden
+    sleep 1
+    
+done
+
+echo "=== Resultaat ==="
+echo "📊 Totaal bestanden: $teller"
+echo "✅ Metadata succesvol bijgewerkt: $success_teller"
+echo ""
+
+if $DRY_RUN; then
+    echo "💡 Voer uit zonder --dry-run om de wijzigingen door te voeren"
+else
+    echo "🎉 Metadata update voltooid!"
+fi

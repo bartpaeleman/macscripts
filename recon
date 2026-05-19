@@ -1,0 +1,932 @@
+#!/usr/bin/env bash
+# ========================================================================
+# === Domein & IP Reconnaissance Script ===
+# ========================================================================
+#
+# GEBRUIK:
+#   Voor domein: ./script.sh [FLAGS] <domein.tld>
+#   Voor IP:     ./script.sh -ip [FLAGS] <ip-adres>
+#   Voor vendor: ./script.sh --vendor <bedrijfsnaam>
+#
+# VOORBEELDEN:
+#   ./script.sh google.com
+#   ./script.sh -ip 8.8.8.8
+#   ./script.sh --vendor "Microsoft Corporation"
+#   ./script.sh --vendor Apple --confirm
+#   ./script.sh --ping --trace google.com
+#
+# FLAGS:
+#   --ping, -p        Voer ping test uit
+#   --trace, -t       Voer traceroute uit (met timeout bescherming)
+#   --ssl, -S         SSL certificaat analyse
+#   --cloudflare, -c  CloudFlare detectie
+#   --vendor, -V      Zoek domeinen voor een vendor/bedrijf
+#   --confirm         Bevestig en gebruik het eerste gevonden domein
+#   --all, -a         Activeer alle features
+#   --silent, -s      Silent mode (minimale output)
+#   --verbose, -v     Verbose mode (meer details)
+#   --help            Toon help
+#
+# OPMERKING:
+#   - Gebruikt alleen standaard macOS tools
+#   - Vendor detectie alleen bij --vendor flag
+#   - Interactieve domein keuze bij vendor detectie
+#   - Output in map: osint-<target>-<timestamp>/
+#
+# ========================================================================
+
+# Kleuren voor output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Default flags
+MODE="domain"
+TARGET=""
+DO_PING=false
+DO_TRACE=false
+DO_SSL=false
+DO_CLOUDFLARE=false
+DO_VENDOR=false
+DO_CONFIRM=false
+VERBOSE=false
+SILENT=false
+
+# Functie om help te tonen
+show_help() {
+    head -n 50 "$0" | grep -E '^#( |$)' | sed 's/^# //' | sed 's/^#//'
+    exit 0
+}
+
+# Functie voor gelogde output
+log() {
+    if [[ "$SILENT" == false ]]; then
+        echo -e "$1"
+    fi
+}
+
+log_info() {
+    if [[ "$VERBOSE" == true ]]; then
+        log "${CYAN}[*] $1${NC}"
+    fi
+}
+
+log_success() {
+    log "${GREEN}[✓] $1${NC}"
+}
+
+log_warning() {
+    log "${YELLOW}[!] $1${NC}"
+}
+
+log_error() {
+    log "${RED}[✗] $1${NC}"
+}
+
+log_vendor() {
+    log "${PURPLE}[🏢] $1${NC}"
+}
+
+# macOS-compatible timeout voor traceroute
+run_traceroute() {
+    local target="$1"
+    local description="$2"
+    
+    log_info "Uitvoeren: $description (met beperkte hops)"
+    
+    # Gebruik beperkte hops en wait time voor macOS
+    traceroute -w 2 "$target" 2>/dev/null &
+    
+    local traceroute_pid=$!
+    local counter=0
+    local max_wait=30  # maximaal 30 seconden wachten
+    
+    # Wacht maximaal 30 seconden voor traceroute
+    while kill -0 "$traceroute_pid" 2>/dev/null; do
+        sleep 1
+        ((counter++))
+        
+        if [[ $counter -gt $max_wait ]]; then
+            log_warning "Traceroute timeout na ${max_wait} seconden"
+            kill -9 "$traceroute_pid" 2>/dev/null
+            echo "Traceroute geannuleerd na timeout van ${max_wait} seconden"
+            return 1
+        fi
+    done
+    
+    # Wacht op clean exit
+    wait "$traceroute_pid" 2>/dev/null
+    return 0
+}
+
+# Functie om security/legal/privacy contact emails te vinden
+find_security_contacts() {
+    local domain="$1"
+    local contacts_file="$OUTPUT_DIR/security_contacts.txt"
+    
+    log_info "Zoeken naar security/legal/privacy contact emails..."
+    
+    {
+        echo "Security & Privacy Contact Emails"
+        echo "================================="
+        echo "Domein: $domain"
+        echo "Datum: $(date)"
+        echo ""
+        echo "Gevonden contact emails:"
+        echo ""
+    } > "$contacts_file"
+    
+    local found_contacts=()
+    
+    # Method 1: WHOIS contact informatie
+    log_info "WHOIS contact informatie analyseren..."
+    whois_emails=$(whois "$domain" 2>/dev/null | grep -iE 'email:|e-mail|contact@|admin@|tech@|security@|abuse@|privacy@|legal@' | grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+    
+    if [[ -n "$whois_emails" ]]; then
+        echo "--- WHOIS Contact Emails ---" >> "$contacts_file"
+        echo "$whois_emails" | sort -u | while read email; do
+            echo "📧 $email" >> "$contacts_file"
+            found_contacts+=("$email")
+        done
+        echo "" >> "$contacts_file"
+    fi
+    
+    # Method 2: Veelvoorkomende security email adressen proberen
+    log_info "Standaard security email adressen proberen..."
+    
+    common_emails=(
+        "security@$domain" "abuse@$domain" "privacy@$domain" 
+        "legal@$domain" "admin@$domain" "contact@$domain"
+        "info@$domain" "support@$domain" "noc@$domain"
+        "security-team@$domain" "infosec@$domain" "compliance@$domain"
+    )
+    
+    echo "--- Veelvoorkomende Security Emails ---" >> "$contacts_file"
+    for email in "${common_emails[@]}"; do
+        # Simpele validatie - in een echt scenario zou je MX records checken
+        echo "📧 $email" >> "$contacts_file"
+        found_contacts+=("$email")
+    done
+    echo "" >> "$contacts_file"
+    
+    # Method 3: DNS TXT records voor security informatie
+    log_info "DNS TXT records analyseren voor contact informatie..."
+    txt_records=$(dig +short "$domain" TXT 2>/dev/null | grep -iE 'contact|security|abuse|privacy')
+    
+    if [[ -n "$txt_records" ]]; then
+        echo "--- Contact Info in DNS TXT Records ---" >> "$contacts_file"
+        echo "$txt_records" >> "$contacts_file"
+        echo "" >> "$contacts_file"
+        
+        # Extraheer emails uit TXT records
+        txt_emails=$(echo "$txt_records" | grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        if [[ -n "$txt_emails" ]]; then
+            echo "$txt_emails" | sort -u | while read email; do
+                found_contacts+=("$email")
+            done
+        fi
+    fi
+    
+    # Samenvatting
+    local unique_contacts=($(printf "%s\n" "${found_contacts[@]}" | sort -u))
+    echo "--- Samenvatting ---" >> "$contacts_file"
+    echo "Totaal unieke contact emails gevonden: ${#unique_contacts[@]}" >> "$contacts_file"
+    echo "" >> "$contacts_file"
+    
+    if [[ ${#unique_contacts[@]} -gt 0 ]]; then
+        log_success "Gevonden ${#unique_contacts[@]} unieke contact emails"
+        for contact in "${unique_contacts[@]}"; do
+            echo "  📧 $contact"
+        done
+    else
+        log_warning "Geen contact emails gevonden"
+    fi
+}
+
+# Interactieve domein keuze functie
+select_domain_interactive() {
+    local domains=("$@")
+    local count=${#domains[@]}
+    
+    echo ""
+    log_vendor "Gevonden $count domein(en):"
+    echo ""
+    
+    # Toon genummerde lijst
+    for i in "${!domains[@]}"; do
+        local domain="${domains[$i]}"
+        local ip_info=$(dig +short "$domain" A | head -1 2>/dev/null)
+        local whois_info=$(whois "$domain" 2>/dev/null | grep -i "orgname\|organization" | head -1 | cut -d':' -f2- | xargs)
+        
+        printf "  ${GREEN}%2d${NC}) ${CYAN}%-30s${NC}" $((i+1)) "$domain"
+        if [[ -n "$ip_info" ]]; then
+            printf " - IP: ${YELLOW}%s${NC}" "$ip_info"
+        fi
+        if [[ -n "$whois_info" ]]; then
+            printf " - Org: ${PURPLE}%s${NC}" "${whois_info:0:30}"
+        fi
+        echo ""
+    done
+    
+    echo ""
+    log_vendor "Kies een domein om verder te gaan:"
+    echo "  1-$count : Kies het bijbehorende domein"
+    echo "  0       : Stop het script"
+    echo ""
+    
+    while true; do
+        read -p "  Keuze [0-$count]: " choice
+        
+        # Valideer input
+        if [[ "$choice" =~ ^[0-9]+$ ]]; then
+            if [[ $choice -eq 0 ]]; then
+                log_info "Script gestopt door gebruiker"
+                exit 0
+            elif [[ $choice -ge 1 ]] && [[ $choice -le $count ]]; then
+                local selected_domain="${domains[$((choice-1))]}"
+                log_success "Geselecteerd: $selected_domain"
+                TARGET="$selected_domain"
+                return 0
+            fi
+        fi
+        
+        log_warning "Ongeldige keuze. Kies een nummer tussen 0 en $count"
+    done
+}
+
+# Vendor detectie functie - ALLEEN bij --vendor flag
+detect_vendor_domains() {
+    local vendor_name="$1"
+    local vendor_file="$OUTPUT_DIR/vendor_domains.txt"
+    
+    log_vendor "Zoeken naar domeinen voor vendor: $vendor_name"
+    log_vendor "Dit kan even duren..."
+    
+    # Maak een lijst van populaire TLDs om te checken
+    local tlds=("com" "be" "nl" "fr" "de" "es" "uk" "net" "org" "info")
+    
+    {
+        echo "Vendor Domein Detectie Rapport"
+        echo "=============================="
+        echo "Vendor: $vendor_name"
+        echo "Datum: $(date)"
+        echo ""
+        echo "Gevonden domeinen:"
+        echo ""
+    } > "$vendor_file"
+    
+    local found_count=0
+    local potential_domains=()
+    
+    # Method 1: Probeer common domein combinaties
+    local vendor_slug=$(echo "$vendor_name" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g' | sed 's/[,.]//g')
+    local vendor_slug_no_dash=$(echo "$vendor_slug" | sed 's/-//g')
+    local vendor_words=($(echo "$vendor_name" | tr '[:upper:]' '[:lower:]' | sed 's/ / /g'))
+    
+    log_info "Genereren van mogelijke domein namen..."
+    
+    # Genereer mogelijke domein combinaties
+    local domain_candidates=()
+    
+    # Eerste woord (max 63 characters - DNS label limit)
+    if [[ ${#vendor_words[@]} -gt 0 ]]; then
+        local first_word="${vendor_words[0]}"
+        if [[ ${#first_word} -le 63 ]]; then
+            domain_candidates+=("$first_word")
+        fi
+    fi
+    
+    # Vendor slug met en zonder dash (max 63 characters)
+    if [[ ${#vendor_slug} -le 63 ]]; then
+        domain_candidates+=("$vendor_slug")
+    fi
+    if [[ ${#vendor_slug_no_dash} -le 63 ]]; then
+        domain_candidates+=("$vendor_slug_no_dash")
+    fi
+    
+    # Combinatie van eerste twee woorden (max 63 characters)
+    if [[ ${#vendor_words[@]} -gt 1 ]]; then
+        local combined="${vendor_words[0]}${vendor_words[1]}"
+        local combined_dash="${vendor_words[0]}-${vendor_words[1]}"
+        
+        if [[ ${#combined} -le 63 ]]; then
+            domain_candidates+=("$combined")
+        fi
+        if [[ ${#combined_dash} -le 63 ]]; then
+            domain_candidates+=("$combined_dash")
+        fi
+    fi
+    
+    # Bekende afkortingen voor grote bedrijven
+    case "$vendor_name" in
+        *[Mm]icrosoft*)
+            domain_candidates+=("microsoft" "msft" "ms")
+            ;;
+        *[Gg]oogle*)
+            domain_candidates+=("google" "goog" "gogl")
+            ;;
+        *[Aa]pple*)
+            domain_candidates+=("apple" "aapl")
+            ;;
+        *[Aa]mazon*)
+            domain_candidates+=("amazon" "amzn")
+            ;;
+        *[Ff]acebook*)
+            domain_candidates+=("facebook" "fb" "meta")
+            ;;
+    esac
+    
+    # Verwijder duplicates en ongeldige domeinen
+    domain_candidates=($(printf "%s\n" "${domain_candidates[@]}" | sort -u | grep -E '^[a-z0-9-]{1,63}$'))
+    
+    log_info "Controleren van ${#domain_candidates[@]} domein combinaties over ${#tlds[@]} TLDs..."
+    
+    # Check elk gegenereerd domein
+    for domain_base in "${domain_candidates[@]}"; do
+        for tld in "${tlds[@]}"; do
+            local test_domain="${domain_base}.${tld}"
+            
+            # DNS label validatie (max 63 chars per label, max 253 chars totaal)
+            if [[ ${#domain_base} -gt 63 ]] || [[ ${#test_domain} -gt 253 ]]; then
+                continue
+            fi
+            
+            # Check of domein bestaat via DNS
+            if dig +short "$test_domain" A 2>/dev/null | grep -q [0-9]; then
+                log_success "Gevonden: $test_domain"
+                potential_domains+=("$test_domain")
+                echo "✅ $test_domain" >> "$vendor_file"
+                ((found_count++))
+                
+                # Voeg WHOIS info toe voor verificatie
+                whois_result=$(whois "$test_domain" 2>/dev/null | grep -i "orgname\|registrant\|organization" | head -2)
+                if [[ -n "$whois_result" ]]; then
+                    echo "   WHOIS: $whois_result" >> "$vendor_file"
+                fi
+                
+                # Voeg IP toe voor context
+                ip_addr=$(dig +short "$test_domain" A | head -1)
+                if [[ -n "$ip_addr" ]]; then
+                    echo "   IP: $ip_addr" >> "$vendor_file"
+                fi
+                echo "" >> "$vendor_file"
+            fi
+        done
+    done
+    
+    # Toon samenvatting
+    echo "" >> "$vendor_file"
+    echo "Samenvatting:" >> "$vendor_file"
+    echo "------------" >> "$vendor_file"
+    echo "Totaal gevonden domeinen: $found_count" >> "$vendor_file"
+    
+    if [[ $found_count -gt 0 ]]; then
+        log_success "Vendor detectie voltooid. $found_count domein(en) gevonden."
+        
+        # Als confirm flag is gebruikt, selecteer het eerste domein
+        if [[ "$DO_CONFIRM" == true ]] && [[ $found_count -gt 0 ]]; then
+            local first_domain="${potential_domains[0]}"
+            log_success "Automatisch geselecteerd: $first_domain"
+            TARGET="$first_domain"
+            MODE="domain"
+            return 0
+        else
+            # Toon interactieve keuze
+            if [[ ${#potential_domains[@]} -gt 0 ]]; then
+                select_domain_interactive "${potential_domains[@]}"
+                local select_result=$?
+                if [[ $select_result -eq 0 ]] && [[ -n "$TARGET" ]]; then
+                    MODE="domain"
+                    return 0
+                else
+                    return 2
+                fi
+            else
+                log_error "Geen geldige domeinen beschikbaar voor selectie"
+                return 1
+            fi
+        fi
+    else
+        log_warning "Geen domeinen gevonden voor vendor: $vendor_name"
+        return 1
+    fi
+}
+
+# Verbeterde validatie functie voor target
+validate_target() {
+    local target="$1"
+    
+    # Check of het een IP adres is
+    if [[ "$target" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "ip"
+        return 0
+    fi
+    
+    # Check of het een geldig domein is volgens DNS specificaties
+    if [[ "$target" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]] && \
+       [[ ${#target} -le 253 ]]; then
+        
+        # Split domein in labels en check elk label
+        local IFS='.'
+        local labels=($target)
+        local valid=true
+        
+        for label in "${labels[@]}"; do
+            # Elk label moet tussen 1 en 63 characters zijn
+            if [[ ${#label} -lt 1 ]] || [[ ${#label} -gt 63 ]]; then
+                valid=false
+                break
+            fi
+            # Label mag niet beginnen of eindigen met hyphen
+            if [[ "$label" =~ ^- ]] || [[ "$label" =~ -$ ]]; then
+                valid=false
+                break
+            fi
+        done
+        
+        if [[ "$valid" == true ]]; then
+            # Check of domein DNS records heeft
+            if dig +short "$target" A 2>/dev/null | grep -q [0-9]; then
+                echo "domain"
+                return 0
+            fi
+        fi
+    fi
+    
+    echo "invalid"
+    return 1
+}
+
+# Parse argumenten
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -ip)
+            MODE="ip"
+            shift
+            ;;
+        --ping|-p)
+            DO_PING=true
+            shift
+            ;;
+        --trace|-t)
+            DO_TRACE=true
+            shift
+            ;;
+        --ssl|-S)
+            DO_SSL=true
+            shift
+            ;;
+        --cloudflare|-c)
+            DO_CLOUDFLARE=true
+            shift
+            ;;
+        --vendor|-V)
+            DO_VENDOR=true
+            MODE="vendor"
+            TARGET="$2"
+            shift 2
+            ;;
+        --confirm)
+            DO_CONFIRM=true
+            shift
+            ;;
+        --all|-a)
+            DO_PING=true
+            DO_TRACE=true
+            DO_SSL=true
+            DO_CLOUDFLARE=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            SILENT=false
+            shift
+            ;;
+        --silent|-s)
+            SILENT=true
+            VERBOSE=false
+            shift
+            ;;
+        --help)
+            show_help
+            ;;
+        -*)
+            log_error "Onbekende flag: $1"
+            echo "Gebruik --help voor instructies"
+            exit 1
+            ;;
+        *)
+            if [[ "$MODE" != "vendor" ]]; then
+                TARGET="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Controleer of target is opgegeven
+if [[ -z "$TARGET" ]]; then
+    log_error "Fout: Geen target opgegeven"
+    echo ""
+    show_help
+fi
+
+# VALIDATIE: Als er een geldig IP/domein is opgegeven, skip vendor detectie
+if [[ "$DO_VENDOR" == false ]]; then
+    target_type=$(validate_target "$TARGET")
+    
+    if [[ "$target_type" == "invalid" ]]; then
+        log_warning "'$TARGET' is geen geldig IP of domein. Probeer --vendor voor vendor detectie."
+        echo ""
+        show_help
+    else
+        MODE="$target_type"
+        log_success "Geldig $MODE gedetecteerd: $TARGET"
+    fi
+fi
+
+# Functie om de benodigde tools te controleren
+check_dependencies() {
+    local missing=()
+    
+    # Vereiste tools
+    for cmd in dig whois host nslookup curl; do
+        if ! command -v "$cmd" &> /dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+    
+    # Optionele tools checken
+    if [[ "$DO_TRACE" == true ]] && ! command -v traceroute &> /dev/null; then
+        log_warning "traceroute niet gevonden. Traceroute wordt overgeslagen."
+        DO_TRACE=false
+    fi
+    
+    if [[ "$DO_SSL" == true ]] && ! command -v openssl &> /dev/null; then
+        log_warning "openssl niet gevonden. SSL check wordt overgeslagen."
+        DO_SSL=false
+    fi
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "De volgende tools zijn vereist maar niet gevonden: ${missing[*]}"
+        exit 1
+    fi
+}
+
+# Functie om een sectie te maken
+print_section() {
+    echo ""
+    echo "================================================================"
+    echo "$1"
+    echo "================================================================"
+    echo ""
+}
+
+# Controleer dependencies
+check_dependencies
+
+# Maak output directory met timestamp
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+if [[ "$MODE" == "ip" ]]; then
+    OUTPUT_DIR="osint-ip-$(echo "$TARGET" | tr '.' '_')-$TIMESTAMP"
+elif [[ "$MODE" == "vendor" ]]; then
+    OUTPUT_DIR="osint-vendor-$(echo "$TARGET" | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g' | sed 's/[^a-zA-Z0-9_-]//g')-$TIMESTAMP"
+else
+    OUTPUT_DIR="osint-$(echo "$TARGET" | tr '.' '_')-$TIMESTAMP"
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+# Vendor detectie modus - ALLEEN bij --vendor flag
+if [[ "$MODE" == "vendor" ]]; then
+    detect_vendor_domains "$TARGET"
+    vendor_result=$?
+    
+    if [[ $vendor_result -eq 0 ]] && [[ -n "$TARGET" ]]; then
+        log_success "Doorgaan met reconnaissance voor: $TARGET"
+        # Verander modus naar domein voor verdere verwerking
+        MODE="domain"
+    elif [[ $vendor_result -eq 2 ]]; then
+        log_vendor "Script gestopt door gebruiker."
+        exit 0
+    else
+        log_error "Vendor detectie gefaald. Geen domeinen gevonden."
+        exit 1
+    fi
+fi
+
+# Als er nog steeds geen geldig target is, stop dan
+if [[ -z "$TARGET" ]]; then
+    log_error "Geen geldig target gevonden om te analyseren."
+    exit 1
+fi
+
+OUTPUT_FILE="$OUTPUT_DIR/reconnaissance_report.txt"
+
+log "${GREEN}=========================================================================="
+if [[ "$MODE" == "ip" ]]; then
+    log "⚡ IP ADRES RECONNAISSANCE voor: $TARGET"
+else
+    log "⚡ DOMEIN RECONNAISSANCE voor: $TARGET"
+fi
+log "Datum: $(date)"
+log "Output map: $OUTPUT_DIR"
+log "==========================================================================${NC}"
+
+# Start de uitvoer
+{
+    echo "=========================================================================="
+    if [[ "$MODE" == "ip" ]]; then
+        echo "⚡ IP ADRES RECONNAISSANCE RAPPORT voor: $TARGET"
+    else
+        echo "⚡ DOMEIN RECONNAISSANCE RAPPORT voor: $TARGET"
+    fi
+    echo "Datum: $(date)"
+    echo "=========================================================================="
+
+    if [[ "$MODE" == "ip" ]]; then
+        # ======================================================================
+        # IP ADRES MODUS
+        # ======================================================================
+        
+        # ----------------------------------------------------------------------
+        # 1. WHOIS INFORMATIE voor IP
+        # ----------------------------------------------------------------------
+        print_section "1. WHOIS INFORMATIE voor IP-adres"
+        
+        whois "$TARGET" | grep -E 'NetName:|OrgName:|Organization:|Country:|Address:|netname:|descr:|route:|origin:|inetnum:' | head -20 || \
+        echo "Geen relevante WHOIS-informatie gevonden."
+
+        # ----------------------------------------------------------------------
+        # 2. Reverse DNS (PTR Record)
+        # ----------------------------------------------------------------------
+        print_section "2. Reverse DNS (PTR Record) - Hostname van IP"
+        
+        REV_DNS=$(host "$TARGET" 2>/dev/null | grep 'pointer' | awk '{print $NF}')
+        if [[ -n "$REV_DNS" ]]; then
+            echo "  -> Hostname: $REV_DNS"
+        else
+            echo "Geen Reverse DNS-entry gevonden voor dit IP."
+        fi
+
+        # ----------------------------------------------------------------------
+        # 3. DNS Query vanaf dit IP (als nameserver)
+        # ----------------------------------------------------------------------
+        print_section "3. Test als Nameserver (indien van toepassing)"
+        
+        echo "Probeert DNS-query via $TARGET als nameserver..."
+        dig @"$TARGET" google.com +short +time=3 2>&1 || \
+        echo "Dit IP fungeert niet als publieke nameserver of reageert niet op DNS-queries."
+
+        # ----------------------------------------------------------------------
+        # 4. Ping test (indien gevraagd of altijd voor IP)
+        # ----------------------------------------------------------------------
+        if [[ "$DO_PING" == true ]]; then
+            print_section "4. Ping Test"
+            echo "Ping test (3 pogingen):"
+            ping -c 3 "$TARGET" 2>&1 || \
+            echo "Ping gefaald - host reageert mogelijk niet op ICMP."
+        fi
+
+        # ----------------------------------------------------------------------
+        # 5. Traceroute (indien gevraagd)
+        # ----------------------------------------------------------------------
+        if [[ "$DO_TRACE" == true ]]; then
+            print_section "5. Traceroute (Netwerk Route)"
+            echo "Traceroute met beperkte hops (max 10) en timeout bescherming..."
+            run_traceroute "$TARGET" "Traceroute naar IP"
+        fi
+
+    else
+        # ======================================================================
+        # DOMEIN MODUS
+        # ======================================================================
+        
+        # ----------------------------------------------------------------------
+        # 1. WHOIS INFORMATIE
+        # ----------------------------------------------------------------------
+        print_section "1. WHOIS INFORMATIE (Eigenaar, Registratie, Contact)"
+        
+        whois_info=$(whois "$TARGET" 2>/dev/null)
+        echo "$whois_info" | grep -E 'Registrar:|Creation Date:|Updated Date:|Expiration Date:|Name Server:|OrgName|Admin Email:|Tech Email:|Registrant Email:' | head -15 || \
+        echo "Geen WHOIS-informatie gevonden of de output is gefilterd."
+
+        # ----------------------------------------------------------------------
+        # 2. DNS A/AAAA RECORDS
+        # ----------------------------------------------------------------------
+        print_section "2. DNS A/AAAA RECORDS (Hoofd IP-adressen)"
+        
+        echo "--- A Record (IPv4) ---"
+        dig +short "$TARGET" A | sed 's/^/  -> /' || \
+        echo "Geen A-records gevonden."
+        
+        echo ""
+        echo "--- AAAA Record (IPv6) ---"
+        dig +short "$TARGET" AAAA | sed 's/^/  -> /' || \
+        echo "Geen AAAA-records gevonden."
+
+        # ----------------------------------------------------------------------
+        # 3. NAAMSERVERS
+        # ----------------------------------------------------------------------
+        print_section "3. NAAMSERVERS (NS Records)"
+        
+        host -t NS "$TARGET" 2>/dev/null | grep "name server" | sed 's/name server/->/' | sed 's/^/  /' || \
+        echo "Geen NS-records gevonden."
+
+        # ----------------------------------------------------------------------
+        # 4. MAIL SERVERS
+        # ----------------------------------------------------------------------
+        print_section "4. MAIL SERVERS (MX Records)"
+        
+        dig +short "$TARGET" MX | sed 's/^/  -> /' || \
+        echo "Geen MX-records gevonden."
+
+        # ----------------------------------------------------------------------
+        # 5. SPF/TXT/DMARC Records
+        # ----------------------------------------------------------------------
+        print_section "5. SPF/TXT/DMARC Records (E-mail beveiliging)"
+        
+        dig +short "$TARGET" TXT | grep -E 'spf|v=DMARC' | sed 's/^/  -> /' || \
+        echo "Geen duidelijke SPF/DMARC-records gevonden."
+        
+        echo ""
+        echo "--- Expliciete DMARC Check (_dmarc.$TARGET) ---"
+        dig +short "_dmarc.$TARGET" TXT | sed 's/^/  -> /' || \
+        echo "Geen expliciet DMARC-record gevonden."
+
+        # ----------------------------------------------------------------------
+        # 6. CNAME RECORDS
+        # ----------------------------------------------------------------------
+        print_section "6. CNAME RECORDS (Aliassen - www, ftp, mail)"
+        
+        found_cname=false
+        for sub in www ftp mail; do
+            result=$(dig +short "$sub.$TARGET" CNAME 2>/dev/null)
+            if [[ -n "$result" ]]; then
+                echo "  -> $sub.$TARGET is een alias voor: $result"
+                found_cname=true
+            fi
+        done
+        
+        if [[ "$found_cname" == false ]]; then
+            echo "Geen veelgebruikte CNAME-records gevonden."
+        fi
+
+        # ----------------------------------------------------------------------
+        # 7. Reverse DNS
+        # ----------------------------------------------------------------------
+        print_section "7. Reverse DNS Check (Hostname van IP)"
+        
+        IP_ADDRESS=$(dig +short "$TARGET" A | head -n 1)
+        if [[ -n "$IP_ADDRESS" ]]; then
+            echo "IP: $IP_ADDRESS"
+            REV_DNS=$(host "$IP_ADDRESS" 2>/dev/null | grep 'pointer' | awk '{print $NF}')
+            if [[ -n "$REV_DNS" ]]; then
+                echo "  -> Reverse Hostname: $REV_DNS"
+            else
+                echo "Geen Reverse DNS-entry gevonden voor dit IP."
+            fi
+        else
+            echo "Kan geen primair IP-adres vinden om Reverse DNS op uit te voeren."
+        fi
+
+        # ----------------------------------------------------------------------
+        # 8. Ping test (indien gevraagd)
+        # ----------------------------------------------------------------------
+        if [[ "$DO_PING" == true ]]; then
+            print_section "8. Ping Test"
+            IP_ADDRESS=$(dig +short "$TARGET" A | head -n 1)
+            if [[ -n "$IP_ADDRESS" ]]; then
+                echo "Ping test naar $IP_ADDRESS (3 pogingen):"
+                ping -c 3 "$IP_ADDRESS" 2>&1 || \
+                echo "Ping gefaald."
+            else
+                echo "Kan geen IP-adres vinden voor ping test."
+            fi
+        fi
+
+        # ----------------------------------------------------------------------
+        # 9. Traceroute (indien gevraagd)
+        # ----------------------------------------------------------------------
+        if [[ "$DO_TRACE" == true ]]; then
+            print_section "9. Traceroute"
+            IP_ADDRESS=$(dig +short "$TARGET" A | head -n 1)
+            if [[ -n "$IP_ADDRESS" ]]; then
+                echo "Traceroute naar $IP_ADDRESS (beperkte hops, timeout bescherming)..."
+                run_traceroute "$IP_ADDRESS" "Traceroute naar domein IP"
+            else
+                echo "Kan geen IP-adres vinden voor traceroute."
+            fi
+        fi
+    fi
+
+} > "$OUTPUT_FILE"
+
+# Toon basis rapport
+if [[ "$SILENT" == false ]]; then
+    cat "$OUTPUT_FILE"
+fi
+
+# ======================================================================
+# EXTRA FEATURES (aparte bestanden)
+# ======================================================================
+
+# Security contact emails zoeken (alleen voor domeinen)
+if [[ "$MODE" == "domain" ]]; then
+    find_security_contacts "$TARGET"
+fi
+
+# SSL Certificate check
+if [[ "$DO_SSL" == true ]] && [[ "$MODE" == "domain" ]]; then
+    log_info "SSL certificaat analyse..."
+    
+    ssl_file="$OUTPUT_DIR/ssl_info.txt"
+    target_ip=$(dig +short "$TARGET" A | head -n1)
+    
+    if [[ -n "$target_ip" ]]; then
+        {
+            echo "SSL Certificaat Informatie voor: $TARGET ($target_ip)"
+            echo "================================================"
+            echo ""
+            echo "--- Basis Certificaat Info ---"
+            openssl s_client -connect "$target_ip:443" -servername "$TARGET" < /dev/null 2>/dev/null | openssl x509 -noout -dates -subject -issuer 2>/dev/null
+            echo ""
+            echo "--- Certificaat Details ---"
+            openssl s_client -connect "$target_ip:443" -servername "$TARGET" < /dev/null 2>/dev/null | openssl x509 -noout -text 2>/dev/null | grep -E 'Subject:|Issuer:|Not Before:|Not After :|DNS:' | head -10
+        } > "$ssl_file" 2>/dev/null
+        
+        if [[ -s "$ssl_file" ]]; then
+            log_success "SSL info opgeslagen in $ssl_file"
+        else
+            log_warning "SSL check leverde geen resultaten op"
+        fi
+    else
+        log_warning "Kon geen IP vinden voor SSL check"
+    fi
+fi
+
+# CloudFlare detectie
+if [[ "$DO_CLOUDFLARE" == true ]] && [[ "$MODE" == "domain" ]]; then
+    log_info "CloudFlare detectie..."
+    
+    cloudflare_file="$OUTPUT_DIR/cloudflare_check.txt"
+    
+    {
+        echo "CloudFlare Detectie Resultaten voor: $TARGET"
+        echo "============================================"
+        echo ""
+        
+        # Check if site uses CloudFlare via headers
+        response=$(curl -s -I "https://$TARGET" 2>/dev/null)
+        
+        if echo "$response" | grep -i "server:.*cloudflare\|cf-ray" > /dev/null; then
+            echo "✅ Deze website gebruikt CloudFlare"
+            echo ""
+            echo "Headers gevonden:"
+            echo "$response" | grep -i "server:\\|cf-ray\\|cache-control" | head -5
+        else
+            echo "❌ Deze website gebruikt waarschijnlijk geen CloudFlare"
+            echo ""
+            echo "Server header:"
+            echo "$response" | grep -i "server:" || echo "Geen server header gevonden"
+        fi
+        
+    } > "$cloudflare_file"
+    
+    log_success "CloudFlare check opgeslagen in $cloudflare_file"
+fi
+
+# Volledige WHOIS (altijd opslaan)
+log_info "Volledige WHOIS opslaan..."
+whois "$TARGET" > "$OUTPUT_DIR/whois_full.txt" 2>&1
+log_success "Volledige WHOIS opgeslagen in $OUTPUT_DIR/whois_full.txt"
+
+# DNS ANY record (altijd opslaan)
+log_info "Alle DNS records opslaan..."
+dig "$TARGET" ANY +noall +answer > "$OUTPUT_DIR/dns_all.txt" 2>&1
+log_success "Alle DNS records opgeslagen in $OUTPUT_DIR/dns_all.txt"
+
+# Samenvatting
+if [[ "$SILENT" == false ]]; then
+    echo ""
+    echo -e "${GREEN}=========================================================================="
+    echo "🎉 Reconnaissance voltooid voor: $TARGET"
+    echo "=========================================================================="
+    echo -e "📁 Alle resultaten opgeslagen in: ${YELLOW}$OUTPUT_DIR/${NC}"
+    echo ""
+    echo "📊 Gegenereerde bestanden:"
+    echo "  - reconnaissance_report.txt  (Hoofd rapport)"
+    echo "  - whois_full.txt            (Volledige WHOIS)"
+    echo "  - dns_all.txt               (Alle DNS records)"
+    [[ "$MODE" == "domain" ]] && echo "  - security_contacts.txt     (Security contact emails)"
+    [[ "$DO_SSL" == true ]] && echo "  - ssl_info.txt              (SSL certificaat info)"
+    [[ "$DO_CLOUDFLARE" == true ]] && echo "  - cloudflare_check.txt     (CloudFlare detectie)"
+    [[ "$MODE" == "vendor" ]] && echo "  - vendor_domains.txt        (Vendor domein detectie)"
+    echo ""
+    echo -e "⏰ Uitvoering voltooid op: $(date)${NC}"
+    echo -e "==========================================================================${NC}"
+fi

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET_DIR="$(pwd)"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Fout: de huidige map bestaat niet."
+    exit 1
+fi
+
+echo "Start met organiseren in: $TARGET_DIR"
+
+find "$TARGET_DIR" -type f -iregex '.*\.mp[34]$' ! -name '._*' -print0 |
+while IFS= read -r -d '' file; do
+    filename="$(basename "$file")"
+
+    if [[ "$filename" == *" - "* ]]; then
+        artist_name="${filename%% - *}"
+    else
+        echo "Geen ' - ' separator in: '$filename' → overslaan"
+        continue
+    fi
+
+    artist_name="$(printf '%s' "$artist_name" | awk '{$1=$1;print}')"
+    artist_ascii="$(printf '%s' "$artist_name" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || printf '%s' "$artist_name")"
+    artist_ascii="$(printf '%s' "$artist_ascii" | tr -d "'\`")"
+    artist_ascii="$(printf '%s' "$artist_ascii" | sed 's#[/\\:*?"<>|]#_#g')"
+
+    artist_dir_name="$(printf '%s' "$artist_ascii" | tr '[:lower:]' '[:upper:]')"
+    artist_dir_name="$(printf '%s' "$artist_dir_name" | awk '{$1=$1;print}')"
+
+    destination_dir="$TARGET_DIR/$artist_dir_name"
+    destination_file="$destination_dir/$filename"
+
+    # Als bestand al in de juiste map staat -> overslaan
+    if [[ "$(dirname "$file")" == "$destination_dir" ]]; then
+        echo "Overslaan (al correct): '$file'"
+        continue
+    fi
+
+    mkdir -p "$destination_dir"
+
+    # Als het doelbestand al bestaat -> overslaan (of hier kan je logica toevoegen voor hernoemen)
+    if [[ -e "$destination_file" ]]; then
+        echo "Bestand bestaat al: '$destination_file' → overslaan"
+        continue
+    fi
+
+    mv -- "$file" "$destination_dir/"
+    echo "Verplaatst: '$filename' -> '$destination_dir/'"
+done
+
+echo "Klaar met organiseren."

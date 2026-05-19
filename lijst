@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# === Bestanden Lijst Generator (Verbeterd) ===
+
+set -euo pipefail
+
+# Standaardwaarden
+EXTENSIE="mp4"
+UITVOER_BESTAND="bestanden_lijst.txt"
+BRONMAP="$(pwd)"
+DOELMAP="$(pwd)"
+VERBOSE=false
+RECURSIVE=true
+INCLUDE_PATHS=false
+
+# --- Help functie ---
+toon_help() {
+    cat << EOF
+Gebruik: $0 [opties]
+
+Genereert een UTF-8 tekstbestand met bestandsnamen (zonder extensie).
+Filtert hidden files (.bestanden) en sorteert op naam.
+
+Opties:
+  -e, --extensie EXT   Bestandsextensie (standaard: mp4)
+  -o, --output FILE    Uitvoerbestand (standaard: bestanden_lijst.txt)
+  -s, --source DIR     Bronmap om te zoeken (standaard: huidige map)
+  -t, --target DIR     Doelmap voor uitvoerbestand (standaard: huidige map)
+  -v, --verbose        Toon gedetailleerde informatie
+  -p, --paths          Includeer padinformatie in de lijst
+  -n, --non-recursive  Zoek alleen in huidige directory (niet recursief)
+  -h, --help           Toon deze help
+
+Voorbeelden:
+  $0                                # MP4 bestanden in huidige map
+  $0 -s /pad/naar/bron -e mp3      # Zoek in bronmap, output in huidige map
+  $0 -s /bron -t /uitvoer -e jpg   # Zoek in /bron, output in /uitvoer
+  $0 -e mp3 -o muziek.txt -v       # Verbose modus met custom output naam
+EOF
+}
+
+# --- Argumenten verwerken ---
+while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+        -e|--extensie)
+            if [[ -n "${2:-}" ]]; then
+                EXTENSIE="${2#.}"
+                shift
+            else
+                echo "❌ --extensie vereist een waarde"
+                exit 1
+            fi
+            ;;
+        -o|--output)
+            if [[ -n "${2:-}" ]]; then
+                UITVOER_BESTAND="$2"
+                shift
+            else
+                echo "❌ --output vereist een bestandsnaam"
+                exit 1
+            fi
+            ;;
+        -s|--source)
+            if [[ -n "${2:-}" ]]; then
+                BRONMAP="$2"
+                shift
+            else
+                echo "❌ --source vereist een pad"
+                exit 1
+            fi
+            ;;
+        -t|--target)
+            if [[ -n "${2:-}" ]]; then
+                DOELMAP="$2"
+                shift
+            else
+                echo "❌ --target vereist een pad"
+                exit 1
+            fi
+            ;;
+        -p|--paths)
+            INCLUDE_PATHS=true
+            ;;
+        -n|--non-recursive)
+            RECURSIVE=false
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        -h|--help)
+            toon_help
+            exit 0
+            ;;
+        *)
+            echo "❌ Onbekende optie: ${1:-}"
+            toon_help
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# --- Controles ---
+if [[ ! -d "$BRONMAP" ]]; then
+    echo "❌ Bronmap bestaat niet: $BRONMAP"
+    exit 1
+fi
+
+if [[ ! -d "$DOELMAP" ]]; then
+    echo "❌ Doelmap bestaat niet: $DOELMAP"
+    exit 1
+fi
+
+if [[ -z "$EXTENSIE" ]]; then
+    echo "❌ Extensie mag niet leeg zijn"
+    exit 1
+fi
+
+echo "=== Bestanden Lijst Generator ==="
+echo "📁 Bronmap: $BRONMAP"
+echo "💾 Doelmap: $DOELMAP"
+echo "📄 Extensie: .$EXTENSIE"
+echo "📝 Uitvoerbestand: $UITVOER_BESTAND"
+echo "🔍 Modus: $($RECURSIVE && echo "Recursief" || echo "Alleen huidige directory")"
+echo "🚫 Hidden files: worden gefilterd"
+echo "🔤 Sortering: alfabetisch"
+echo
+
+# Tijdelijk bestand voor verwerking
+TMP_FILE=$(mktemp -t bestanden_lijst.XXXXXX)
+trap 'rm -f "$TMP_FILE"' EXIT INT TERM
+
+echo "🔍 Zoeken naar .$EXTENSIE bestanden in $BRONMAP..."
+
+# Find commando met filtering van hidden files en sortering
+if $RECURSIVE; then
+    echo "🌳 Zoeken recursief..."
+    find "$BRONMAP" -type f -iname "*.${EXTENSIE}" ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
+else
+    echo "📂 Zoeken niet-recursief..."
+    find "$BRONMAP" -maxdepth 1 -type f -iname "*.${EXTENSIE}" ! -name ".*" | sort > "$TMP_FILE"
+fi
+
+# Tel aantal gevonden bestanden
+AANTAL_BESTANDEN=$(wc -l < "$TMP_FILE" 2>/dev/null | tr -d ' ' || echo "0")
+
+if [[ $AANTAL_BESTANDEN -eq 0 ]] || [[ -z "$AANTAL_BESTANDEN" ]]; then
+    echo "❌ Geen .$EXTENSIE bestanden gevonden in $BRONMAP (zonder hidden files)"
+    exit 1
+fi
+
+echo "✅ Aantal gevonden .$EXTENSIE bestanden: $AANTAL_BESTANDEN"
+
+if $VERBOSE; then
+    echo ""
+    echo "📋 Gevonden bestanden (gesorteerd):"
+    echo "----------------------------------------"
+    head -10 "$TMP_FILE" | while read -r line; do
+        echo "📄 $line"
+    done
+    if [[ $AANTAL_BESTANDEN -gt 10 ]]; then
+        echo "... (en nog $((AANTAL_BESTANDEN - 10)) bestanden)"
+    fi
+    echo "----------------------------------------"
+fi
+
+# Bepaal het volledige pad voor het uitvoerbestand
+OUTPUT_PATH="$DOELMAP/$UITVOER_BESTAND"
+echo "💾 Uitvoerbestand wordt opgeslagen in: $OUTPUT_PATH"
+
+echo ""
+echo "🔄 Verwerken van bestanden..."
+
+{
+    # Header met metadata
+    echo "# Bestanden lijst gegenereerd op: $(date)"
+    echo "# Bronmap: $BRONMAP"
+    echo "# Doelmap: $DOELMAP"
+    echo "# Extensie: .$EXTENSIE"
+    echo "# Aantal bestanden: $AANTAL_BESTANDEN"
+    echo "# Sortering: alfabetisch"
+    echo "# Hidden files: gefilterd"
+    echo "#"
+    echo "# Bestandsnamen (zonder extensie):"
+    echo ""
+
+    # Verwerk elk bestand - gesorteerd
+    while IFS= read -r bestand; do
+        [[ -z "$bestand" ]] && continue
+        
+        # Verwijder de BRONMAP van het pad voor nettere weergave
+        relatieve_pad="${bestand#$BRONMAP/}"
+        
+        if $INCLUDE_PATHS; then
+            # Behoud pad maar verwijder extensie
+            bestand_zonder_extensie="${relatieve_pad%.$EXTENSIE}"
+            # Voor hoofdletter extensies
+            upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
+            bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+        else
+            # Alleen bestandsnaam zonder pad
+            bestand_naam=$(basename "$relatieve_pad")
+            bestand_zonder_extensie="${bestand_naam%.$EXTENSIE}"
+            # Voor hoofdletter extensies
+            upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
+            bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+        fi
+        
+        # Toon informatie als verbose modus aan staat
+        if $VERBOSE; then
+            if $INCLUDE_PATHS; then
+                echo "📝 $relatieve_pad -> $bestand_zonder_extensie"
+            else
+                echo "📝 $(basename "$relatieve_pad") -> $bestand_zonder_extensie"
+            fi
+        fi
+        
+        # Schrijf naar uitvoer
+        echo "$bestand_zonder_extensie"
+        
+    done < "$TMP_FILE"
+} > "$OUTPUT_PATH"
+
+# Controleer of het bestand succesvol is aangemaakt
+if [[ ! -f "$OUTPUT_PATH" ]]; then
+    echo "❌ Fout bij aanmaken uitvoerbestand: $OUTPUT_PATH"
+    exit 1
+fi
+
+echo "✅ Bestand succesvol aangemaakt: $OUTPUT_PATH"
+
+# Toon voorbeeld van inhoud
+echo ""
+echo "📋 Voorbeeld van gegenereerde inhoud (eerste 10 regels):"
+echo "----------------------------------------"
+head -10 "$OUTPUT_PATH"
+echo "----------------------------------------"
+
+# Toon bestandsgrootte en encoding
+if command -v file >/dev/null 2>&1; then
+    encoding=$(file -b --mime-encoding "$OUTPUT_PATH")
+    echo "🔍 Bestandsencoding: $encoding"
+fi
+
+echo ""
+echo "🎉 Klaar! $AANTAL_BESTANDEN bestanden verwerkt en gesorteerd."
+echo "📁 Bron: $BRONMAP"
+echo "💾 Doel: $DOELMAP"
+echo "🚫 Hidden files zijn gefilterd"
+echo "🔤 Bestanden zijn alfabetisch gesorteerd"

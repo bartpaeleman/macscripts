@@ -1,0 +1,152 @@
+#!/bin/bash
+# Master Wrapper Script for cyber-master toolset
+
+CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_WRAPPER="$CYBER_MASTER_DIR/common/run_python.sh"
+ALIASES="$CYBER_MASTER_DIR/common/aliases.sh"
+
+source "$ALIASES"
+
+show_help() {
+    echo "Cyber-Master: Modular Cybersecurity Toolset"
+    echo "=========================================="
+    echo "Usage: ./cyber.sh <command> [arguments]"
+    echo ""
+    echo "Commands:"
+    echo "  mail <file>       Run the Phishing Email Analyzer on an .eml file."
+    echo "  enrich <target>   Run the Passive DNS & URL Enricher."
+    echo "  score             Run the Risk Scorer (requires JSON via stdin)."
+    echo "  report [format]   Generate a Markdown, HTML, or PDF report (requires JSON via stdin)."
+    echo ""
+    echo "Pipeline Wrappers:"
+    echo "  threatctx <target> Run the full enrichment, scoring, and reporting pipeline."
+    echo "  mhdr <file>        Extract key findings (IP, SPF, DKIM) from an email."
+    echo "  mailtrace <file>   Analyze an email and display the Terminal UI."
+    echo ""
+    echo "Interactive:"
+    echo "  interactive        Start the interactive wizard to guide you through tools."
+    echo ""
+}
+
+# Colors
+GREEN='\033[1;32m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'
+
+pause() {
+    echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+    read -r
+}
+
+get_eml_file() {
+    read -e -p "Enter path to .eml file or raw headers: " eml_file
+    if [ ! -f "$eml_file" ]; then
+        echo -e "${RED}File not found: $eml_file${NC}"
+        pause
+        return 1
+    fi
+    return 0
+}
+
+get_target() {
+    read -e -p "Enter target IP or Domain: " target
+    if [ -z "$target" ]; then
+        echo -e "${RED}Target cannot be empty.${NC}"
+        pause
+        return 1
+    fi
+    return 0
+}
+
+run_interactive() {
+    while true; do
+        clear
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "         ${CYAN}CYBER-MASTER CONTROL PANEL${NC}"
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${GREEN}--- Email / Phishing Analysis ---${NC}"
+        echo "1) Analyze Email (mailtrace)"
+        echo "2) Extract Key Findings from Email (mhdr)"
+        echo -e "\n${GREEN}--- Recon & Threat Context ---${NC}"
+        echo "3) Recon Domain/IP and Generate Markdown Report"
+        echo "4) Recon Domain/IP and Generate HTML Report"
+        echo "5) Recon Domain/IP and Generate PDF Report"
+        echo -e "\n${YELLOW}X) Exit${NC}"
+        echo -e "${CYAN}================================================${NC}"
+
+        read -p "Select action: " choice
+
+        case "$choice" in
+            1)
+                if get_eml_file; then mailtrace "$eml_file"; pause; fi
+                ;;
+            2)
+                if get_eml_file; then cat "$eml_file" | mhdr; pause; fi
+                ;;
+            3)
+                if get_target; then threatctx "$target"; pause; fi
+                ;;
+            4)
+                if get_target; then echo "{\"target\": \"$target\"}" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/enrich/enricher.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/scoring/risk_scorer.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/reporting/reporter.py" --format html; pause; fi
+                ;;
+            5)
+                if get_target; then echo "{\"target\": \"$target\"}" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/enrich/enricher.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/scoring/risk_scorer.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/reporting/reporter.py" --format pdf; pause; fi
+                ;;
+            [xX])
+                echo -e "${GREEN}Exiting...${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice.${NC}"
+                pause
+                ;;
+        esac
+    done
+}
+
+# Default to interactive if no arguments
+COMMAND=${1:-interactive}
+if [ $# -gt 0 ]; then
+    shift
+fi
+
+case "$COMMAND" in
+    mail)
+        "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/mail/mail_analyzer.py" "$@"
+        ;;
+    enrich)
+        "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/enrich/enricher.py" "$@"
+        ;;
+    score)
+        "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/scoring/risk_scorer.py" "$@"
+        ;;
+    report)
+        "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/reporting/reporter.py" "$@"
+        ;;
+    threatctx)
+        threatctx "$@"
+        ;;
+    mhdr)
+        if [ -n "$1" ] && [ -f "$1" ]; then
+            cat "$1" | mhdr
+        else
+            mhdr
+        fi
+        ;;
+    mailtrace)
+        mailtrace "$@"
+        ;;
+    interactive)
+        run_interactive
+        ;;
+    --help|-h|help)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        show_help
+        exit 1
+        ;;
+esac

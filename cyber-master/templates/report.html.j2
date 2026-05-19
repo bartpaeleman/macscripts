@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cybersecurity Analysis Report: {{ schema.target }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+        h1 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+        h2 { color: #0056b3; margin-top: 30px; }
+        .score { font-size: 1.2em; font-weight: bold; }
+        .score-high { color: red; }
+        .score-low { color: green; }
+        ul { margin-bottom: 20px; }
+        li { margin-bottom: 5px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 15px; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Cybersecurity Analysis Report: {{ schema.target }}</h1>
+
+    <p class="score">
+        Risk Score:
+        <span class="{% if schema.risk_score > 50 %}score-high{% else %}score-low{% endif %}">
+            {{ schema.risk_score }} / 100
+        </span>
+    </p>
+
+    {% if schema.risk_reasons %}
+    <h2>Risk Reasons</h2>
+    <ul>
+    {% for reason in schema.risk_reasons %}
+        <li>{{ reason }}</li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if schema.mail %}
+    <h2>Mail Analysis</h2>
+    <ul>
+        <li><strong>From:</strong> {{ schema.mail.headers.from }}</li>
+        <li><strong>Reply-To:</strong> {{ schema.mail.headers.reply_to }}</li>
+        <li><strong>SPF:</strong> {{ schema.mail.auth.spf }}</li>
+        <li><strong>DKIM:</strong> {{ schema.mail.auth.dkim }}</li>
+        <li><strong>DMARC:</strong> {{ schema.mail.auth.dmarc }}</li>
+    </ul>
+    {% endif %}
+
+    {% if schema.asn %}
+    <h2>ASN Information</h2>
+    <ul>
+        <li><strong>ASN:</strong> {{ schema.asn.asn }}</li>
+        <li><strong>ISP:</strong> {{ schema.asn.isp }}</li>
+        <li><strong>Organization:</strong> {{ schema.asn.org }}</li>
+        <li><strong>Country:</strong> {{ schema.asn.country }}</li>
+    </ul>
+    {% endif %}
+
+    {% if schema.tls %}
+    <h2>TLS Certificate</h2>
+    <ul>
+        <li><strong>Issuer:</strong> {{ schema.tls.issuer }}</li>
+        <li><strong>Days until expiry:</strong> {{ schema.tls.days_until_expiry }}</li>
+    </ul>
+    {% endif %}
+
+    {% if schema.ioc %}
+    <h2>Indicators of Compromise (IOCs)</h2>
+
+    {% if schema.ioc.whois %}
+    {% if schema.mail %}
+    <h3>Sender Domain WHOIS</h3>
+    {% else %}
+    <h3>Domain WHOIS Information</h3>
+    {% endif %}
+    <ul>
+        <li><strong>Registrar:</strong> {{ schema.ioc.whois.registrar }}</li>
+        <li><strong>Creation Date:</strong> {{ schema.ioc.whois.creation_date }}</li>
+        <li><strong>Contact:</strong> {{ schema.ioc.whois.contact }}</li>
+    </ul>
+    {% endif %}
+
+    {% if schema.ioc.urls %}
+    <h3>Extracted URLs</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Display Text</th>
+                <th>Actual Link</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for u in schema.ioc.urls %}
+            <tr>
+                <td>{{ u.text }}</td>
+                <td>{{ u.url }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <ul>
+    {% if schema.ioc.virustotal %}
+        <li><strong>VirusTotal Malicious Hits:</strong> {{ schema.ioc.virustotal.vt_stats.malicious }}</li>
+    {% endif %}
+    {% if schema.ioc.rdns %}
+        <li><strong>Reverse DNS:</strong> {{ schema.ioc.rdns }}</li>
+    {% endif %}
+    </ul>
+
+    {% if schema.ioc.shodan %}
+    <h3>Shodan Intelligence</h3>
+    <ul>
+        <li><strong>Open Ports:</strong> {{ schema.ioc.shodan.ports | join(', ') }}</li>
+        <li><strong>OS:</strong> {{ schema.ioc.shodan.os }}</li>
+        <li><strong>Vulnerabilities:</strong> {{ schema.ioc.shodan.vulns | length }}</li>
+    </ul>
+    {% endif %}
+
+    {% endif %}
+</body>
+</html>

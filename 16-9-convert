@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# === MP4 naar 16:9 Converter voor macOS ===
+#
+# Flags / opties:
+#   --verbose   : toont debug informatie
+#   --clean     : verwijdert kapotte symlinks, ._ bestanden, normaliseert bestandsnamen
+#   --overwrite : originele bestanden overschrijven
+#
+# Script:
+#   1. Maakt een centrale folder "00-CONVERTED" of overschrijft de originele
+#   2. Zoekt recursief naar MP4/M4V bestanden
+#   3. Skip broken symlinks, ._ bestanden, niet-lezende bestanden en te kleine bestanden
+#   4. Probeert copy, valt terug op 0e-encode indien nodig
+#   5. Plaatst alle geconverteerde bestanden in de centrale map
+
+# === MP4 naar 16:9 Converter voor macOS ===
+
+set -euo pipefail
+
+MIN_SIZE_BYTES=10240
+central_dir="$(pwd)/00-CONVERTED"
+VERBOSE=false
+CLEAN=false
+OVERWRITE=false
+
+# --- Argumenten verwerken ---
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -v|--verbose) VERBOSE=true ;;
+        --clean) CLEAN=true ;;
+        -o|--overwrite) OVERWRITE=true ;;
+        *) echo "❌ Onbekende optie: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+echo "=== MP4 naar 16:9 Converter ==="
+$VERBOSE && echo "🔧 Debugmodus ingeschakeld"
+$CLEAN && echo "🧹 Auto-clean ingeschakeld"
+$OVERWRITE && echo "📝 Overschrijven originele bestanden ingeschakeld"
+echo
+
+# --- FFmpeg controle ---
+for cmd in ffmpeg ffprobe; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "❌ $cmd niet gevonden. Installeer met: brew install ffmpeg"
+        exit 1
+    fi
+done
+$VERBOSE && echo "✅ FFmpeg: $(which ffmpeg)"
+echo
+
+# --- Maak centrale folder alleen als niet overschrijven ---
+if ! $OVERWRITE; then
+    if ! mkdir -p "$central_dir"; then
+        echo "❌ Kan $central_dir niet maken"
+        exit 1
+    fi
+    echo "📁 Centrale folder: $central_dir"
+else
+    echo "📁 Output directory: Huidige directory (overschrijven)"
+fi
+
+echo
+echo "🔍 Zoeken naar MP4 bestanden vanuit: $(pwd)"
+
+# --- Auto-clean functie ---
+if $CLEAN; then
+    echo "🧹 Uitvoeren auto-clean..."
+    
+    find . -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+    find . -name '._*' -type f -size -10k -delete 2>/dev/null || true
+
+    while IFS= read -r -d '' file; do
+        [[ ! -f "$file" ]] && continue
+        
+        dir="$(dirname "$file")"
+        base="$(basename "$file")"
+        newbase="$base"
+
+        newbase=$(echo "$newbase" | sed 's/[:?*"<>|&'\'']/ /g')
+        newbase=$(echo "$newbase" | tr -s ' ')
+        newbase=$(echo "$newbase" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [[ "$base" != "$newbase" ]] && [[ -n "$newbase" ]]; then
+            newpath="$dir/$newbase"
+            [[ ! -e "$newpath" ]] && mv -n "$file" "$newpath" 2>/dev/null || echo "   ⚠️  Kon niet hernoemen: $base"
+        fi
+    done < <(find . -type f -print0 2>/dev/null)
+
+    echo "🧹 Auto-clean voltooid"
+fi
+
+# --- Bestanden vinden ---
+tmp_list="$(mktemp -t 16-9-list.XXXXXX 2>/dev/null || mktemp /tmp/16-9-list.XXXXXX)"
+trap 'rm -f "$tmp_list"' EXIT INT TERM
+
+find . -type f \( -iname "*.mp4" -o -iname "*.m4v" \) ! -name '._*' ! -name '.DS_Store' -print0 2>/dev/null > "$tmp_list"
+
+success=0
+failed=0
+total_files=0
+
+# --- Bestanden verwerken ---
+while IFS= read -r -d '' file; do
+    [[ -z "$file" ]] && continue
+    ((total_files++))
+    basefile="$(basename "$file")"
+    echo "📹 Verwerken ($total_files): $basefile"
+
+    # Bestandscontroles
+    if [[ ! -f "$file" ]] || [[ ! -r "$file" ]]; then
+        echo "   ❌ Bestand niet leesbaar of bestaat niet"
+        ((failed++))
+        continue
+    fi
+
+    filesize=$(stat -f%z "$file" 2>/dev/null || wc -c <"$file" | tr -d ' ')
+    if (( filesize < MIN_SIZE_BYTES )); then
+        echo "   ⛔ Bestand te klein (${filesize} bytes)"
+        ((failed++))
+        continue
+    fi
+
+    if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 "$file" >/dev/null 2>&1; then
+        echo "   ❌ Geen geldig video bestand"
+        ((failed++))
+        continue
+    fi
+
+    # Output pad bepalen
+    if $OVERWRITE; then
+        extension="${basefile##*.}"
+        output="$file"
+        tmp_output="$(dirname "$file")/.${basefile}.$RANDOM.$$.$extension"
+        backup_file="$(dirname "$file")/.${basefile}.backup.$(date +%Y%m%d_%H%M%S)"
+    else
+        base_name="${basefile%.*}"
+        extension="${basefile##*.}"
+        safe_filename="$basefile"
+        counter=1
+        
+        while [[ -e "$central_dir/$safe_filename" ]]; do
+            safe_filename="${base_name} ${counter}.${extension}"
+            ((counter++))
+            [[ $counter -gt 100 ]] && break
+        done
+        
+        output="$central_dir/$safe_filename"
+        tmp_output="$central_dir/.${base_name}.$RANDOM.$$.$extension"
+        backup_file=""
+    fi
+
+    # Cleanup functie
+    cleanup() {
+        rm -f "$tmp_output" 2>/dev/null || true
+        if $OVERWRITE && [[ -n "$backup_file" ]] && [[ -f "$backup_file" ]]; then
+            rm -f "$backup_file" 2>/dev/null || true
+        fi
+    }
+    trap cleanup EXIT INT TERM
+
+    # Backup maken bij overschrijven
+    if $OVERWRITE; then
+        # echo "   💾 Backup maken: $(basename "$backup_file")"
+        cp "$file" "$backup_file" 2>/dev/null || { echo "   ❌ Kon geen backup maken"; ((failed++)); continue; }
+    fi
+
+    # Eerste poging: copy met aspect ratio
+    # echo "   🔄 Eerste poging: copy met metadata update..."
+    if ffmpeg -v error -y -i "$file" -c copy -movflags +faststart -aspect 16:9 "$tmp_output" >/dev/null 2>&1 && [[ -s "$tmp_output" ]]; then
+        copy_success=true
+    else
+        copy_success=false
+    fi
+
+    if $copy_success; then
+        if $OVERWRITE; then
+            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (metadata, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)); continue; }
+            rm -f "$backup_file" 2>/dev/null || true
+        else
+            mv -f "$tmp_output" "$output"
+            echo "   ✅ Conversie succesvol (metadata)"
+        fi
+        ((success++))
+        continue
+    fi
+
+    # Tweede poging: re-encode
+    # echo "   🔄 Tweede poging: re-encode..."
+    if ffmpeg -v error -y -i "$file" \
+        -vf "scale=iw:ih:flags=lanczos,setdar=16/9" \
+        -c:v libx264 -preset fast -crf 23 \
+        -c:a aac -b:a 128k \
+        -movflags +faststart \
+        "$tmp_output" >/dev/null 2>&1 && [[ -s "$tmp_output" ]]; then
+        
+        if $OVERWRITE; then
+            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (re-encode, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)); continue; }
+            rm -f "$backup_file" 2>/dev/null || true
+        else
+            mv -f "$tmp_output" "$output"
+            echo "   ✅ Conversie succesvol (re-encode)"
+        fi
+        ((success++))
+    else
+        echo "   ❌ Conversie mislukt"
+        ((failed++))
+        rm -f "$tmp_output" 2>/dev/null || true
+        $OVERWRITE && mv -f "$backup_file" "$output" 2>/dev/null || true
+    fi
+
+done < "$tmp_list"
+
+echo
+echo "=== Resultaten ==="
+echo "📊 Totaal bestanden gevonden: $total_files"
+echo "✅ Succes: $success"
+echo "❌ Mislukt: $failed"
+if $OVERWRITE; then
+    echo "💾 Modus: Originele bestanden overschreven"
+else
+    echo "💾 Modus: Nieuwe bestanden in $central_dir"
+fi
+
+if [[ $failed -gt 0 ]]; then
+    echo
+    echo "💡 Tip: Gebruik --verbose voor meer details over de fouten"
+fi
+
+echo
+echo "🎉 Klaar!"

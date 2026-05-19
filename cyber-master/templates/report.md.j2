@@ -1,0 +1,70 @@
+# Cybersecurity Analysis Report: {{ schema.target }}
+
+**Risk Score:** {{ schema.risk_score }} / 100
+
+{% if schema.risk_reasons %}
+## Risk Reasons
+{% for reason in schema.risk_reasons %}
+- {{ reason }}
+{% endfor %}
+{% endif %}
+
+{% if schema.mail %}
+## Mail Analysis
+- **From:** {{ schema.mail.headers.from }}
+- **Reply-To:** {{ schema.mail.headers.reply_to }}
+- **SPF:** {{ schema.mail.auth.spf }}
+- **DKIM:** {{ schema.mail.auth.dkim }}
+- **DMARC:** {{ schema.mail.auth.dmarc }}
+{% endif %}
+
+{% if schema.asn %}
+## ASN Information
+- **ASN:** {{ schema.asn.asn }}
+- **ISP:** {{ schema.asn.isp }}
+- **Organization:** {{ schema.asn.org }}
+- **Country:** {{ schema.asn.country }}
+{% endif %}
+
+{% if schema.tls %}
+## TLS Certificate
+- **Issuer:** {{ schema.tls.issuer }}
+- **Days until expiry:** {{ schema.tls.days_until_expiry }}
+{% endif %}
+
+{% if schema.ioc %}
+## Indicators of Compromise (IOCs)
+
+{% if schema.ioc.whois %}
+{% if schema.mail %}
+### Sender Domain WHOIS
+{% else %}
+### Domain WHOIS Information
+{% endif %}
+- **Registrar:** {{ schema.ioc.whois.registrar }}
+- **Creation Date:** {{ schema.ioc.whois.creation_date }}
+- **Contact:** {{ schema.ioc.whois.contact }}
+{% endif %}
+
+{% if schema.ioc.urls %}
+### Extracted URLs
+| Display Text | Actual Link |
+| --- | --- |
+{% for u in schema.ioc.urls %}
+| {{ u.text }} | {{ u.url }} |
+{% endfor %}
+{% endif %}
+
+{% if schema.ioc.virustotal %}
+- **VirusTotal Malicious Hits:** {{ schema.ioc.virustotal.vt_stats.malicious }}
+{% endif %}
+{% if schema.ioc.rdns %}
+- **Reverse DNS:** {{ schema.ioc.rdns }}
+{% endif %}
+{% if schema.ioc.shodan %}
+### Shodan Intelligence
+- **Open Ports:** {{ schema.ioc.shodan.ports | join(', ') }}
+- **OS:** {{ schema.ioc.shodan.os }}
+- **Vulnerabilities:** {{ schema.ioc.shodan.vulns | length }}
+{% endif %}
+{% endif %}

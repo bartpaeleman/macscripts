@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# Controleer of ffmpeg geïnstalleerd is
+if ! command -v ffmpeg &> /dev/null; then
+    echo "ffmpeg is niet geïnstalleerd. Installeer het eerst (bv. met 'brew install ffmpeg')."
+    exit 1
+fi
+
+echo "Script om MP4 video te combineren met audio van een gelijknamige MP3."
+echo "====================================================================="
+echo ""
+
+# Zoek alle .mp4 bestanden in de huidige directory en subdirectories
+find . -type f -name "*.mp4" | while read -r mp4_file; do
+    
+    # Haal de bestandsnaam zonder extensie en de directory op
+    dir_path=$(dirname "$mp4_file")
+    basename=$(basename "$mp4_file" .mp4)
+    
+    # Definieer het pad naar het verwachte MP3-bestand
+    mp3_file="${dir_path}/${basename}.mp3"
+    
+    # Definieer de naam van het output-bestand
+    output_file="${dir_path}/${basename}-converted.mp4"
+    
+    # Controleer of het bijbehorende MP3-bestand bestaat
+    if [ -f "$mp3_file" ]; then
+        echo "=== Match gevonden! ==="
+        echo "Video:  $mp4_file"
+        echo "Audio:  $mp3_file"
+        
+        # Voorkom dat we een al geconverteerd bestand opnieuw verwerken
+        if [[ "$basename" == *"-converted" ]]; then
+            echo "    → Dit is al een geconverteerd bestand, overslaan..."
+            echo ""
+            continue
+        fi
+
+        # Voorkom dat we een bestaand output-bestand overschrijven zonder reden
+        if [ -f "$output_file" ]; then
+            echo "    → Output bestand '$output_file' bestaat al, overslaan..."
+            echo ""
+            continue
+        fi
+        
+        echo "    → Bezig met combineren naar: ${basename}-converted.mp4"
+        
+        # Gebruik ffmpeg om de video van de MP4 te combineren met de audio van de MP3
+        # -map 0:v -> Gebruik de videostream van het eerste input-bestand (de MP4)
+        # -map 1:a -> Gebruik de audiostream van het tweede input-bestand (de MP3)
+        # -c:v copy -> Kopieer de videostream zonder hercodering (snel, geen kwaliteitsverlies)
+        # -c:a aac -b:a 192k -> Converteer de audio naar AAC (standaard voor MP4)
+        # -shortest -> Stop de conversie als de kortste van de twee streams eindigt
+        ffmpeg -hide_banner -loglevel error -i "$mp4_file" -i "$mp3_file" \
+               -map 0:v -map 1:a \
+               -c:v copy -c:a aac -b:a 192k \
+               -shortest -y "$output_file"
+               
+        # Controleer of het commando succesvol was
+        if [ $? -eq 0 ] && [ -s "$output_file" ]; then
+            filesize=$(ls -lh "$output_file" | awk '{print $5}')
+            echo "    ✓ Succesvol gecombineerd! ($filesize)"
+        else
+            echo "    ✗ Er is iets misgegaan tijdens het combineren."
+            # Verwijder een eventueel mislukt (leeg) bestand
+            rm -f "$output_file"
+        fi
+        echo ""
+        
+    fi
+done
+
+echo "Script voltooid."

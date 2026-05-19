@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+# === Music Consolidator - Artiest Folders Samenvoegen ===
+#
+# Dit script doorzoekt recursief alle subdirectories naar muziekbestanden
+# en groepeert alle bestanden van dezelfde artiest in één centrale folder.
+# Bij duplicaten wordt automatisch een nummer toegevoegd.
+#
+# Compatibel met oudere Bash versies (geen associatieve arrays vereist)
+#
+# Flags / opties:
+#   --verbose   : toont debug informatie
+#   --dry-run   : toon alleen wat er zou gebeuren zonder bestanden te verplaatsen
+#   --merge     : specifieke bronmap die met target moet worden samengevoegd
+#   --target    : specifieke doelmap (standaard: huidige directory)
+#
+# Gebruik:
+#   ./music-consolidator.sh
+#   ./music-consolidator.sh --verbose
+#   ./music-consolidator.sh --dry-run --target /pad/naar/muziek
+#   ./music-consolidator.sh --merge /old-music --target /organized-music
+
+set -euo pipefail
+
+TARGET_DIR="$(pwd)"
+SOURCE_DIR=""
+VERBOSE=false
+DRY_RUN=false
+MERGE_MODE=false
+
+# --- Argumenten verwerken ---
+while [[ $# -gt 0 ]]; do
+    case "${1:-}" in
+        -v|--verbose) VERBOSE=true ;;
+        --dry-run) DRY_RUN=true ;;
+        --target) 
+            if [[ -n "${2:-}" ]]; then
+                TARGET_DIR="$2"
+                shift
+            else
+                echo "❌ --target vereist een pad"
+                exit 1
+            fi
+            ;;
+        --merge)
+            if [[ -n "${2:-}" ]]; then
+                SOURCE_DIR="$2"
+                MERGE_MODE=true
+                shift
+            else
+                echo "❌ --merge vereist een bronmap pad"
+                exit 1
+            fi
+            ;;
+        -h|--help)
+            echo "Music Consolidator - Groepeert muziek per artiest"
+            echo ""
+            echo "Gebruik: $0 [opties]"
+            echo ""
+            echo "Modi:"
+            echo "  Standaard: Consolideer bestanden in huidige directory"
+            echo "  Merge:     Voeg bestanden uit bronmap toe aan doelstructuur"
+            echo ""
+            echo "Opties:"
+            echo "  -v, --verbose       Toon gedetailleerde informatie"
+            echo "  --dry-run           Toon alleen wat er zou gebeuren"
+            echo "  --target DIR        Doelmap (standaard: huidige directory)"
+            echo "  --merge SOURCE      Voeg bestanden uit SOURCE samen met TARGET"
+            echo "  -h, --help          Toon deze hulp"
+            echo ""
+            echo "Voorbeelden:"
+            echo "  $0                                    # Consolideer huidige map"
+            echo "  $0 --target /music --dry-run         # Test in /music"
+            echo "  $0 --merge /downloads --target /music # Voeg downloads toe aan music"
+            exit 0
+            ;;
+        *) 
+            echo "❌ Onbekende optie: ${1:-}"
+            echo "Gebruik --help voor hulp"
+            exit 1 
+            ;;
+    esac
+    shift
+done
+
+echo "=== Music Consolidator ==="
+$VERBOSE && echo "🔧 Verbose modus ingeschakeld"
+$DRY_RUN && echo "🔍 Dry-run modus (geen echte verplaatsingen)"
+
+if $MERGE_MODE; then
+    echo "🔄 Merge modus: Samenvoegen van bestanden"
+    echo "📁 Bronmap: $SOURCE_DIR"
+    echo "📁 Doelmap: $TARGET_DIR"
+else
+    echo "📁 Consolidatie in: $TARGET_DIR"
+fi
+echo
+
+# --- Directory controles ---
+if [[ ! -d "$TARGET_DIR" ]]; then
+    echo "❌ Doelmap bestaat niet: $TARGET_DIR"
+    exit 1
+fi
+
+if $MERGE_MODE; then
+    if [[ ! -d "$SOURCE_DIR" ]]; then
+        echo "❌ Bronmap bestaat niet: $SOURCE_DIR"
+        exit 1
+    fi
+    
+    # Controleer dat bron en doel niet hetzelfde zijn
+    if [[ "$SOURCE_DIR" -ef "$TARGET_DIR" ]] 2>/dev/null; then
+        echo "❌ Bronmap en doelmap zijn hetzelfde"
+        exit 1
+    fi
+    
+    # Controleer dat bron niet in doel zit (oneindige lus voorkomen)
+    case "$(cd "$SOURCE_DIR" && pwd)" in
+        "$(cd "$TARGET_DIR" && pwd)"/*) 
+            echo "❌ Bronmap zit in doelmap - dit zou een oneindige lus veroorzaken"
+            exit 1
+            ;;
+    esac
+    
+    cd "$SOURCE_DIR"
+    search_dir="."
+else
+    cd "$TARGET_DIR" 
+    search_dir="."
+fi
+
+# --- Tijdelijke bestanden voor data opslag ---
+tmp_list="$(mktemp -t music-consolidator.XXXXXX 2>/dev/null || mktemp /tmp/music-consolidator.XXXXXX)"
+tmp_artists="$(mktemp -t music-artists.XXXXXX 2>/dev/null || mktemp /tmp/music-artists.XXXXXX)"
+tmp_analysis="$(mktemp -t music-analysis.XXXXXX 2>/dev/null || mktemp /tmp/music-analysis.XXXXXX)"
+
+trap 'rm -f "$tmp_list" "$tmp_artists" "$tmp_analysis"' EXIT INT TERM
+
+echo "🔍 Zoeken naar muziekbestanden..."
+
+# Zoek alle muziekbestanden recursief - GECORRIGEERDE REGEX
+find "$search_dir" -type f \( -iname "*.mp3" -o -iname "*.mp4" -o -iname "*.m4a" \) ! -name '._*' ! -path '*/.*' -print0 > "$tmp_list"
+
+# Tel totaal aantal bestanden
+total_files=0
+while IFS= read -r -d '' file; do
+    [[ -n "$file" ]] && ((total_files++))
+done < "$tmp_list"
+
+if [[ $total_files -eq 0 ]]; then
+    echo "ℹ️  Geen muziekbestanden gevonden"
+    exit 0
+fi
+
+echo "📊 Gevonden bestanden: $total_files"
+echo
+
+moved_count=0
+skipped_count=0
+error_count=0
+
+# --- Functie om artiest directory naam te maken ---
+normalize_artist_name() {
+    local artist_name="$1"
+    local normalized
+    
+    # Eerst whitespace normaliseren
+    normalized="$(printf '%s' "$artist_name" | awk '{$1=$1;print}')"
+    
+    # Alleen bestandssysteem-problematische karakters vervangen
+    # Behoud accenten en speciale karakters zoals é, ç, etc.
+    normalized="$(printf '%s' "$normalized" | sed 's#[/\\:*?"<>|]#_#g')"
+    
+    # Naar uppercase
+    normalized="$(printf '%s' "$normalized" | tr '[:lower:]' '[:upper:]')"
+    
+    # Verwijder dubbele spaties
+    normalized="$(printf '%s' "$normalized" | tr -s ' ')"
+    
+    # Laatste whitespace cleanup
+    normalized="$(printf '%s' "$normalized" | awk '{$1=$1;print}')"
+    
+    printf '%s' "$normalized"
+}
+
+# --- Functie om unieke bestandsnaam te genereren ---
+get_unique_filename() {
+    local destination_dir="$1"
+    local filename="$2"
+    local base_name="${filename%.*}"
+    local extension="${filename##*.}"
+    local final_filename="$filename"
+    local counter=1
+    
+    while [[ -e "$destination_dir/$final_filename" ]]; do
+        final_filename="${base_name}_${counter}.${extension}"
+        ((counter++))
+        if [[ $counter -gt 1000 ]]; then
+            echo "ERROR_TOO_MANY_DUPLICATES"
+            return 1
+        fi
+    done
+    
+    printf '%s' "$final_filename"
+}
+
+# --- Eerste fase: analyseren en verzamelen ---
+echo "🔄 Fase 1: Analyseren van bestanden..."
+
+> "$tmp_analysis"  # Leeg bestand maken
+
+while IFS= read -r -d '' file; do
+    [[ -z "$file" ]] && continue
+    
+    filename="$(basename "$file")"
+    $VERBOSE && echo "   📋 Analyseren: $filename"
+
+    # Artiest extraheren uit bestandsnaam (voor " - " separator)
+    if [[ "$filename" == *" - "* ]]; then
+        artist_name="${filename%% - *}"
+    else
+        $VERBOSE && echo "      ⚠️  Geen ' - ' separator gevonden -> overslaan"
+        ((skipped_count++))
+        continue
+    fi
+
+    # Artiest naam normaliseren
+    artist_dir_name="$(normalize_artist_name "$artist_name")"
+    
+    # Opslaan in analysis bestand: artist_name|artist_dir_name|file_path|filename
+    printf '%s|%s|%s|%s\n' "$artist_name" "$artist_dir_name" "$file" "$filename" >> "$tmp_analysis"
+    
+    $VERBOSE && echo "      ✅ Artiest: '$artist_name' -> Map: '$artist_dir_name'"
+
+done < "$tmp_list"
+
+# --- Unieke artiesten extraheren en tellen ---
+cut -d'|' -f1 "$tmp_analysis" | sort | uniq > "$tmp_artists"
+
+# --- Tweede fase: samenvatting tonen ---
+echo
+echo "📋 Analyse resultaten:"
+echo "┌─────────────────────────────────────────┬─────────┬──────────────────────────┐"
+echo "│ Artiest                                 │ Aantal  │ Doelmap                  │"
+echo "├─────────────────────────────────────────┼─────────┼──────────────────────────┤"
+
+while IFS= read -r artist; do
+    [[ -z "$artist" ]] && continue
+    
+    # Tel bestanden voor deze artiest
+    count=$(grep -c "^$artist|" "$tmp_analysis" 2>/dev/null || echo "0")
+    
+    # Haal directory naam op
+    dir_name=$(grep "^$artist|" "$tmp_analysis" | head -1 | cut -d'|' -f2)
+    
+    # Truncate lange namen voor display
+    display_artist="$artist"
+    if [[ ${#display_artist} -gt 39 ]]; then
+        display_artist="${display_artist:0:36}..."
+    fi
+    
+    display_dir="$dir_name"
+    if [[ ${#display_dir} -gt 24 ]]; then
+        display_dir="${display_dir:0:21}..."
+    fi
+    
+    printf "│ %-39s │ %7d │ %-24s │\n" "$display_artist" "$count" "$display_dir"
+    
+done < "$tmp_artists"
+
+echo "└─────────────────────────────────────────┴─────────┴──────────────────────────┘"
+echo
+
+if $DRY_RUN; then
+    echo "🔍 DRY-RUN: De volgende acties zouden worden uitgevoerd:"
+    echo
+fi
+
+# --- Derde fase: bestanden verplaatsen ---
+echo "🔄 Fase 2: Bestanden consolideren..."
+
+while IFS= read -r artist; do
+    [[ -z "$artist" ]] && continue
+    
+    # Haal eerste entry op om directory naam te krijgen
+    first_entry=$(grep "^$artist|" "$tmp_analysis" | head -1)
+    artist_dir_name=$(echo "$first_entry" | cut -d'|' -f2)
+    
+    if $MERGE_MODE; then
+        destination_dir="$TARGET_DIR/$artist_dir_name"
+    else
+        destination_dir="./$artist_dir_name"
+    fi
+    
+    echo "👤 Verwerken artiest: $artist"
+    $VERBOSE && echo "   📁 Doelmap: $destination_dir"
+    
+    # Map maken (als niet dry-run)
+    if ! $DRY_RUN; then
+        mkdir -p "$destination_dir"
+    else
+        echo "   [DRY-RUN] mkdir -p \"$destination_dir\""
+    fi
+    
+    # Maak tijdelijk bestand voor bestanden van deze artiest
+    tmp_artist_files="$(mktemp -t artist-files.XXXXXX 2>/dev/null || mktemp /tmp/artist-files.XXXXXX)"
+    
+    # Haal alle bestanden voor deze artiest op
+    grep "^$artist|" "$tmp_analysis" > "$tmp_artist_files"
+    
+    # Verwerk alle bestanden voor deze artiest
+    while IFS='|' read -r _ _ file filename; do
+        [[ -z "$file" ]] && continue
+        
+        # Voor merge mode: converteer relatief pad naar absoluut pad in bronmap
+        if $MERGE_MODE; then
+            if [[ "$file" = ./* ]]; then
+                file="$SOURCE_DIR/${file#./}"
+            elif [[ "$file" != /* ]]; then
+                file="$SOURCE_DIR/$file"
+            fi
+        fi
+        
+        current_dir="$(dirname "$file")"
+        
+        # Skip als bestand al in de juiste map staat
+        if [[ "$current_dir" -ef "$destination_dir" ]] 2>/dev/null; then
+            $VERBOSE && echo "   ⏭️  Overslaan (al correct): $filename"
+            continue
+        fi
+        
+        # Bepaal finale bestandsnaam (met duplicaat handling)
+        if ! $DRY_RUN; then
+            final_filename="$(get_unique_filename "$destination_dir" "$filename")"
+            if [[ "$final_filename" == "ERROR_TOO_MANY_DUPLICATES" ]]; then
+                echo "   ❌ Te veel duplicaten voor: $filename"
+                ((error_count++))
+                continue
+            fi
+        else
+            # Voor dry-run, simuleer unieke naam check
+            final_filename="$filename"
+            counter=1
+            while [[ -e "$destination_dir/$final_filename" ]]; do
+                base_name="${filename%.*}"
+                extension="${filename##*.}"
+                final_filename="${base_name}_${counter}.${extension}"
+                ((counter++))
+                [[ $counter -gt 20 ]] && break  # Beperk voor dry-run
+            done
+        fi
+        
+        destination_file="$destination_dir/$final_filename"
+        
+        # Toon wat er gaat gebeuren
+        if [[ "$final_filename" != "$filename" ]]; then
+            echo "   📄 $filename -> $final_filename (hernoemd wegens duplicaat)"
+        else
+            echo "   📄 $filename"
+        fi
+        
+        # Verplaats bestand (als niet dry-run)
+        if ! $DRY_RUN; then
+            if mv "$file" "$destination_file" 2>/dev/null; then
+                ((moved_count++))
+                $VERBOSE && echo "      ✅ Verplaatst naar: $destination_file"
+            else
+                echo "      ❌ Fout bij verplaatsen: $file"
+                ((error_count++))
+            fi
+        else
+            echo "   [DRY-RUN] mv \"$file\" \"$destination_file\""
+            ((moved_count++))
+        fi
+        
+    done < "$tmp_artist_files"
+    
+    # Cleanup tijdelijk bestand
+    rm -f "$tmp_artist_files"
+    
+    echo
+    
+done < "$tmp_artists"
+
+# moved_count en error_count worden nu bijgehouden in de loops hierboven
+
+unique_artists=$(wc -l < "$tmp_artists" 2>/dev/null || echo "0")
+
+# --- Resultaten ---
+echo "=== Eindresultaten ==="
+echo "📊 Totaal bestanden geanalyseerd: $total_files"
+echo "🎵 Unieke artiesten gevonden: $unique_artists"
+
+if $DRY_RUN; then
+    echo "🔍 Bestanden die zouden worden verplaatst: $moved_count"
+else
+    echo "✅ Bestanden succesvol verplaatst: $moved_count"
+fi
+
+echo "⏭️  Bestanden overgeslagen: $skipped_count"
+[[ $error_count -gt 0 ]] && echo "❌ Fouten: $error_count"
+
+echo
+if $DRY_RUN; then
+    echo "💡 Voer het script nogmaals uit zonder --dry-run om de wijzigingen door te voeren"
+else
+    echo "🎉 Consolidatie voltooid!"
+fi

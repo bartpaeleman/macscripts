@@ -1,0 +1,130 @@
+#!/bin/bash
+
+# CDG+MP3 converter met quote-safe file handling en AAC audio voor macOS compatibiliteit
+
+if ! command -v ffmpeg &> /dev/null; then
+    echo "ffmpeg is niet geïnstalleerd. Installeer het eerst met: brew install ffmpeg"
+    exit 1
+fi
+
+# Functie om ffmpeg met timeout uit te voeren
+run_ffmpeg_with_timeout() {
+    local timeout_seconds=300  # 5 minuten timeout
+    local cdg_file="$1"
+    local mp3_file="$2"
+    local output_file="$3"
+    local method="$4"
+
+    echo "    → Methode: $method (max ${timeout_seconds}s)"
+
+    local ffmpeg_pid
+
+    # Start juiste ffmpeg commando gebaseerd op methode
+    case "$method" in
+        "standaard")
+            # STANDAARD CONVERSIE (Nu met AAC audio in plaats van MP3 copy)
+            ffmpeg -hide_banner -loglevel error -f cdg -i "$cdg_file" -i "$mp3_file" \
+                   -c:v libx264 -preset fast -crf 24 -pix_fmt yuv420p \
+                   -c:a aac -b:a 192k -shortest -y "$output_file" &
+            ffmpeg_pid=$!
+            ;;
+        "audio-only")
+            # AUDIO-ONLY (Reeds AAC)
+            ffmpeg -hide_banner -loglevel error -f lavfi \
+                   -i "color=c=black:size=640x480:rate=30000/1001" -i "$mp3_file" \
+                   -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
+                   -c:a aac -b:a 128k -shortest -y "$output_file" &
+            ffmpeg_pid=$!
+            ;;
+    esac
+
+    # Wacht met timeout
+    local count=0
+    while kill -0 $ffmpeg_pid 2>/dev/null; do
+        sleep 5
+        ((count += 5))
+        if [ $count -ge $timeout_seconds ]; then
+            echo "    → Timeout! Proces wordt gestopt..."
+            kill -9 $ffmpeg_pid 2>/dev/null
+            wait $ffmpeg_pid 2>/dev/null
+            return 1
+        fi
+    done
+    wait $ffmpeg_pid
+    return $?
+}
+
+# Functie om een CDG+MP3 paar te converteren
+convert_cdg_mp3() {
+    local mp3_path="$1"
+    local dir_path=$(dirname "$mp3_path")
+    # Verwijder .mp3 of .MP3 (case-insensitive) van de bestandsnaam
+    local basename=$(basename "$mp3_path" | sed 's/\.[mM][pP]3$//')
+    local cdg_path="${dir_path}/${basename}.cdg"
+    local output_path="${dir_path}/${basename}.mp4"
+    
+    echo ""
+    echo "=== Verwerken: $(basename "$mp3_path") ==="
+    
+    # Skip als MP4 al bestaat
+    if [ -f "$output_path" ]; then
+        echo "    → MP4 bestaat al, overslaan..."
+        return 0
+    fi
+    
+    if [ -f "$cdg_path" ]; then
+        echo "    → CDG bestand gevonden, start video conversie..."
+        if run_ffmpeg_with_timeout "$cdg_path" "$mp3_path" "$output_path" "standaard"; then
+            echo "    ✓ Conversie succesvol!"
+        else
+            echo "    ✗ Conversie mislukt, maak audio-only versie..."
+            rm -f "$output_path"
+            if ! run_ffmpeg_with_timeout "" "$mp3_path" "$output_path" "audio-only"; then
+                echo "    ✗ Alle methodes gefaald"
+            fi
+        fi
+    else
+        echo "    → Geen CDG bestand gevonden, maak audio-only MP4..."
+        run_ffmpeg_with_timeout "" "$mp3_path" "$output_path" "audio-only"
+    fi
+    
+    # Controleer resultaat
+    if [ -f "$output_path" ] && [ -s "$output_path" ]; then
+        local filesize=$(ls -lh "$output_path" | awk '{print $5}')
+        echo "    ✓ KLAAR: $(basename "$output_path") ($filesize)"
+        return 0
+    else
+        echo "    ✗ Geen geldig MP4 bestand gemaakt"
+        return 1
+    fi
+}
+
+# Hoofdscript
+echo "CDG+MP3 naar MP4 Converter"
+echo "=========================="
+echo "Start tijd: $(date)"
+echo ""
+
+total_processed=0
+total_success=0
+start_time=$(date +%s)
+
+# De "find" opdracht wordt nu gecombineerd met "xargs"
+# om de bestanden correct door te geven en te verwerken in de hoofdshell.
+# De lus wordt uitgevoerd in de hoofdshell, waardoor de variabelen correct worden bijgewerkt.
+find . -iname "*.mp3" -type f -print0 | while read -d '' -r mp3_file; do
+    convert_cdg_mp3 "$mp3_file"
+    result=$?
+    
+    ((total_processed++))
+    if [ $result -eq 0 ]; then
+        ((total_success++))
+    fi
+done
+
+end_time=$(date +%s)
+duration=$((end_time - start_time))
+
+echo ""
+echo "=== VOLTOOID ==="
+echo "Totale tijd: ${duration} seconden"
