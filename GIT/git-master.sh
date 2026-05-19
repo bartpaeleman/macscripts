@@ -65,15 +65,8 @@ load_env() {
         exit 1
     fi
 
-    # Set default paths if not configured
-    PATH_ROOT="${PATH_ROOT:-/share/Web}"
-    PATH_PROD="${PATH_PROD:-${PATH_ROOT}}"
-    PATH_DEV="${PATH_DEV:-${PATH_ROOT}/DEV}"
-    PATH_TEST="${PATH_TEST:-${PATH_ROOT}/TEST}"
-
-    # QNAP persistence paths
-    PERSISTENT_SCRIPT_PATH="${PERSISTENT_SCRIPT_PATH:-${PATH_DEV}/scripts/git-master.sh}"
-    PERSISTENT_ENV="${PERSISTENT_ENV:-${PATH_DEV}/scripts/.env}"
+    # Determine execution context (No longer tracking PROD/DEV/TEST separately)
+    PATH_ROOT="${PWD}"
 }
 
 # --- COLOR DEFINITIONS ---
@@ -148,21 +141,8 @@ show_git_stats() {
 }
 
 detect_environment() {
-    local current_path="$1"
-
-    if [[ "$current_path" == "$PATH_DEV"* ]]; then
-        echo "${GREEN}[ ENV: DEV (QNAP) ]${NC}"
-        return 0
-    elif [[ "$current_path" == "$PATH_TEST"* ]]; then
-        echo "${YELLOW}[ ENV: TEST (UAT) ]${NC}"
-        return 0
-    elif [[ "$current_path" == "$PATH_PROD"* ]]; then
-        echo "${RED}${BOLD}[ ENV: PROD (LIVE) ]${NC}"
-        return 1
-    else
-        echo "${NC}[ LOCATION: EXTERNAL ]"
-        return 0
-    fi
+    echo "${NC}[ LOCATION: ${PWD} ]"
+    return 0
 }
 
 # Ensure authentication token is configured in git remote
@@ -277,7 +257,6 @@ while true; do
         printf " 3. FIX           (Errors)\n"
         printf " 4. MAINTENANCE   (Backup & Restore)\n"
         printf -- "\n---------------------------------------------------------------\n"
-        printf " S) SETUP PERSISTENCE- Fix QNAP login & Aliases\n"
         printf " Q) QUIT\n"
         printf -- "${BOLD}===============================================================${NC}\n"
 
@@ -922,73 +901,6 @@ while true; do
                 *)
                     printf "${YELLOW}Action cancelled.${NC}\n"
                     ;;
-            esac
-            read -p "Enter..." junk ;;
-
-        [Ss]) # SETUP
-            clear
-            printf "${YELLOW}Environment Setup${NC}\n"
-            printf "Current .env: ${ENV_FILE}\n\n"
-
-            printf "1) Edit current .env\n"
-            printf "2) Create new .env from template\n"
-            printf "3) Show current configuration\n"
-            printf "4) Install Aliases (Multi-Shell Support)\n"
-            printf "X) Cancel\n\n"
-            read -p "Choose option: " setup_choice
-
-            case "$setup_choice" in
-                1)
-                    ${EDITOR:-nano} "$ENV_FILE"
-                    printf "${GREEN}Reloading configuration...${NC}\n"
-                    load_env
-                    ;;
-                2)
-                    if [[ -f "$ENV_FILE" ]]; then
-                        printf "\n${YELLOW}=== CURRENT REQUIRED INFO ===${NC}\n"
-                        # Parse only REQUIRED fields for display
-                        grep -E "^(GITHUB_TOKEN|GITHUB_USERNAME|PATH_ROOT)=" "$ENV_FILE" | while IFS='=' read -r key value; do
-                            value="${value%\"}"
-                            value="${value#\"}"
-                            printf "  ${CYAN}%-15s${NC}: %s\n" "$key" "$value"
-                        done
-                        printf "${YELLOW}=============================${NC}\n\n"
-
-                        read -p "Existing configuration found. Use this configuration (and cancel overwrite)? (y/n): " use_existing
-                        if [[ "$use_existing" == "y" ]]; then
-                            printf "${GREEN}Keeping existing configuration.${NC}\n"
-                            read -p "Enter..." junk
-                            continue
-                        fi
-                    fi
-
-                    if [[ -f "$ENV_EXAMPLE" ]]; then
-                        read -p "This will overwrite current .env. Continue? (y/n): " confirm
-                        if [[ "$confirm" == "y" ]]; then
-                            cp "$ENV_EXAMPLE" "$ENV_FILE"
-                            printf "${GREEN}Created new .env from template${NC}\n"
-                            printf "${YELLOW}Please edit and configure it now${NC}\n"
-                            ${EDITOR:-nano} "$ENV_FILE"
-                            load_env
-                        fi
-                    else
-                        printf "${RED}.env.example not found at: ${ENV_EXAMPLE}${NC}\n"
-                    fi
-                    ;;
-                3)
-                    printf "\n${CYAN}Current Configuration:${NC}\n"
-                    printf "  GitHub User: ${GITHUB_USERNAME}\n"
-                    printf "  GitHub Token: $([ -n "$GITHUB_TOKEN" ] && echo "***configured***" || echo "NOT SET")\n"
-                    printf "  PATH_ROOT: ${PATH_ROOT}\n"
-                    printf "  PATH_PROD: ${PATH_PROD}\n"
-                    printf "  PATH_DEV: ${PATH_DEV}\n"
-                    printf "  PATH_TEST: ${PATH_TEST}\n"
-                    ;;
-                4)
-                     printf "${YELLOW}Dev Tools setup is no longer managed via external scripts.${NC}\n"
-                     read -p "Enter..." junk
-                     ;;
-                [Xx]) ;;
             esac
             read -p "Enter..." junk ;;
 
