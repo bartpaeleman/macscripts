@@ -1,6 +1,13 @@
 #!/bin/bash
 # Master Wrapper Script for DIRECTORY tools
 
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 DIR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/DIRECTORY" && pwd)"
 
 # Colors
@@ -23,6 +30,7 @@ while true; do
     echo -e "${GREEN}Available tools:${NC}"
     echo "1) lijst"
     echo "2) csvlijst"
+    echo "3) copy_sync"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -39,6 +47,12 @@ while true; do
             echo -e "${GREEN}Running csvlijst...${NC}"
             read -e -p "Enter arguments for csvlijst: " args
             eval "\"$DIR_DIR/csvlijst\" $args"
+            pause
+            ;;
+        3)
+            echo -e "${GREEN}Running copy_sync...${NC}"
+            read -e -p "Enter arguments for copy_sync (or press enter for interactive): " args
+            eval "\"$DIR_DIR/copy_sync\" $args"
             pause
             ;;
         [xX])

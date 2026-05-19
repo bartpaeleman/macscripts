@@ -1,6 +1,13 @@
 #!/bin/bash
 # Master Wrapper Script for AUDIO tools
 
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 AUDIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/AUDIO" && pwd)"
 
 # Colors

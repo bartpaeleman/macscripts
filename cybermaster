@@ -1,6 +1,13 @@
 #!/bin/bash
 # Master Wrapper Script for CYBER toolset
 
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    exit 0
+fi
+
 CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/CYBER" && pwd)"
 PYTHON_WRAPPER="$CYBER_MASTER_DIR/common/run_python.sh"
 ALIASES="$CYBER_MASTER_DIR/common/aliases.sh"
