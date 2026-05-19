@@ -122,6 +122,9 @@ if [[ ! -d "$BRONMAP" ]]; then
     fi
 fi
 
+# Remove trailing slash
+BRONMAP="${BRONMAP%/}"
+
 # --- Controles ---
 if [[ ! -d "$BRONMAP" ]]; then
     echo "❌ Bronmap bestaat niet: $BRONMAP"

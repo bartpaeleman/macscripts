@@ -87,6 +87,9 @@ if [[ ! -d "$BRONMAP" ]]; then
     fi
 fi
 
+# Remove trailing slash to prevent directory depth issues later on
+BRONMAP="${BRONMAP%/}"
+
 if $SHOW_ALL; then
     SHOW_NAAM=true
     SHOW_TYPE=true

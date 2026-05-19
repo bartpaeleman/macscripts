@@ -1,7 +1,7 @@
 #!/bin/bash
-# Master Wrapper Script for cyber-master toolset
+# Master Wrapper Script for CYBER toolset
 
-CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/CYBER" && pwd)"
 PYTHON_WRAPPER="$CYBER_MASTER_DIR/common/run_python.sh"
 ALIASES="$CYBER_MASTER_DIR/common/aliases.sh"
 
@@ -17,6 +17,8 @@ show_help() {
     echo "  enrich <target>   Run the Passive DNS & URL Enricher."
     echo "  score             Run the Risk Scorer (requires JSON via stdin)."
     echo "  report [format]   Generate a Markdown, HTML, or PDF report (requires JSON via stdin)."
+    echo "  geotrace          Run the geotrace script."
+    echo "  recon             Run the recon script."
     echo ""
     echo "Pipeline Wrappers:"
     echo "  threatctx <target> Run the full enrichment, scoring, and reporting pipeline."
@@ -73,6 +75,8 @@ run_interactive() {
         echo "3) Recon Domain/IP and Generate Markdown Report"
         echo "4) Recon Domain/IP and Generate HTML Report"
         echo "5) Recon Domain/IP and Generate PDF Report"
+        echo "6) Run geotrace"
+        echo "7) Run recon"
         echo -e "\n${YELLOW}X) Exit${NC}"
         echo -e "${CYAN}================================================${NC}"
 
@@ -93,6 +97,16 @@ run_interactive() {
                 ;;
             5)
                 if get_target; then echo "{\"target\": \"$target\"}" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/enrich/enricher.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/scoring/risk_scorer.py" | "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/reporting/reporter.py" --format pdf; pause; fi
+                ;;
+            6)
+                read -e -p "Enter arguments for geotrace: " args
+                eval "$CYBER_MASTER_DIR/geotrace $args"
+                pause
+                ;;
+            7)
+                read -e -p "Enter arguments for recon: " args
+                eval "$CYBER_MASTER_DIR/recon $args"
+                pause
                 ;;
             [xX])
                 echo -e "${GREEN}Exiting...${NC}"
@@ -124,6 +138,12 @@ case "$COMMAND" in
         ;;
     report)
         "$PYTHON_WRAPPER" "$CYBER_MASTER_DIR/reporting/reporter.py" "$@"
+        ;;
+    geotrace)
+        "$CYBER_MASTER_DIR/geotrace" "$@"
+        ;;
+    recon)
+        "$CYBER_MASTER_DIR/recon" "$@"
         ;;
     threatctx)
         threatctx "$@"
