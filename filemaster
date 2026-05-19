@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for FILE tools
+
+FILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/FILE" && pwd)"
+
+exec "$FILE_DIR/file-master.sh" "$@"

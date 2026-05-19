@@ -33,22 +33,26 @@ while true; do
     case "$choice" in
         1)
             echo -e "${GREEN}Running convertcdg...${NC}"
-            "$KARAOKE_DIR/convertcdg"
+            read -e -p "Enter arguments for convertcdg: " args
+            eval "\"$KARAOKE_DIR/convertcdg\" $args"
             pause
             ;;
         2)
             echo -e "${GREEN}Running musicinfo...${NC}"
-            "$KARAOKE_DIR/musicinfo"
+            read -e -p "Enter arguments for musicinfo: " args
+            eval "\"$KARAOKE_DIR/musicinfo\" $args"
             pause
             ;;
         3)
             echo -e "${GREEN}Running musicorganizer...${NC}"
-            "$KARAOKE_DIR/musicorganizer"
+            read -e -p "Enter arguments for musicorganizer: " args
+            eval "\"$KARAOKE_DIR/musicorganizer\" $args"
             pause
             ;;
         4)
             echo -e "${GREEN}Running consolidate_per_artist...${NC}"
-            "$KARAOKE_DIR/consolidate_per_artist"
+            read -e -p "Enter arguments for consolidate_per_artist: " args
+            eval "\"$KARAOKE_DIR/consolidate_per_artist\" $args"
             pause
             ;;
         [xX])

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for SCRIPT tools
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/SCRIPT" && pwd)"
+
+exec "$SCRIPT_DIR/script-master.sh" "$@"

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for TEXT tools
+
+TEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/TEXT" && pwd)"
+
+exec "$TEXT_DIR/text-master.sh" "$@"

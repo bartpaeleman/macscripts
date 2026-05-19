@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for INTEL tools
+
+INTEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/INTEL" && pwd)"
+
+exec "$INTEL_DIR/threat-intel.sh" "$@"

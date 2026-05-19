@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for DB tools
+
+DB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/DB" && pwd)"
+
+exec "$DB_DIR/db-master.sh" "$@"

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for NETWORK tools
+
+NETWORK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/NETWORK" && pwd)"
+
+exec "$NETWORK_DIR/network-master.sh" "$@"

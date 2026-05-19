@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for DATA tools
+
+DATA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/DATA" && pwd)"
+
+exec "$DATA_DIR/data-master.sh" "$@"
