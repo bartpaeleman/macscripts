@@ -1,0 +1,6 @@
+#!/bin/bash
+# Master Wrapper Script for WEB tools
+
+WEB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/WEB" && pwd)"
+
+exec "$WEB_DIR/scaffold.sh" "$@"

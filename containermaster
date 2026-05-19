@@ -1,0 +1,7 @@
+#!/bin/bash
+# Master Wrapper Script for CONTAINER tools
+
+CONTAINER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/CONTAINER" && pwd)"
+
+# Defer to the actual interactive script
+exec "$CONTAINER_DIR/container-master.sh" "$@"

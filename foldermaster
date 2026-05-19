@@ -32,13 +32,13 @@ while true; do
         1)
             echo -e "${GREEN}Running lijst...${NC}"
             read -e -p "Enter arguments for lijst: " args
-            eval "$DIR_DIR/lijst $args"
+            eval "\"$DIR_DIR/lijst\" $args"
             pause
             ;;
         2)
             echo -e "${GREEN}Running csvlijst...${NC}"
             read -e -p "Enter arguments for csvlijst: " args
-            eval "$DIR_DIR/csvlijst $args"
+            eval "\"$DIR_DIR/csvlijst\" $args"
             pause
             ;;
         [xX])

@@ -30,7 +30,8 @@ while true; do
     case "$choice" in
         1)
             echo -e "${GREEN}Running fixaac...${NC}"
-            "$AUDIO_DIR/fixaac"
+            read -e -p "Enter arguments for fixaac (e.g. source directory): " args
+            eval "\"$AUDIO_DIR/fixaac\" $args"
             pause
             ;;
         [xX])
