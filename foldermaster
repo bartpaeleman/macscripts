@@ -9,8 +9,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo -e "Directory Master
   1) Folder lijst
   2) Folder CSV lijst
-  3) Copy or Sync Folders
-  4) Compare Folders"
+  3) Copy of Synch Folders
+  4) Vergelijk Folders"
     echo ""
     echo "Gebruik zonder argumenten om het interactieve menu te starten."
     echo "=========================================="
@@ -41,8 +41,8 @@ while true; do
     echo -e "${GREEN}Available tools:${NC}"
     echo "1) Folder lijst"
     echo "2) Folder CSV lijst"
-    echo "3) Copy or Sync Folders"
-    echo "4) Compare Folders"
+    echo "3) Copy of Sync Folders"
+    echo "4) Vergelijk Folders"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -51,25 +51,25 @@ while true; do
     case "$choice" in
         1)
             echo -e "${GREEN}Running lijst...${NC}"
-            read -e -p "Enter arguments: " args
+            read -e -p "Geef argumenten: " args
             eval "\"$DIR_DIR/lijst\" $args"
             pause
             ;;
         2)
             echo -e "${GREEN}Running csvlijst...${NC}"
-            read -e -p "Enter arguments: " args
+            read -e -p "Geef argumenten: " args
             eval "\"$DIR_DIR/csvlijst\" $args"
             pause
             ;;
         3)
             echo -e "${GREEN}Running copy_sync...${NC}"
-            read -e -p "Enter arguments (or press enter for interactive): " args
+            read -e -p "Geef argumenten (of druk enter voor interactief): " args
             eval "\"$DIR_DIR/copy_sync\" $args"
             pause
             ;;
         4)
             echo -e "${GREEN}Running compare_folders...${NC}"
-            read -e -p "Enter arguments (or press enter for interactive): " args
+            read -e -p "Geef argumenten (of druk enter voor interactief): " args
             eval "\"$DIR_DIR/compare_folders\" $args"
             pause
             ;;
