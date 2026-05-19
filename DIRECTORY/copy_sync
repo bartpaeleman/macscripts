@@ -93,12 +93,41 @@ case "$choice" in
         ;;
 esac
 
+# Filters
+echo -e "\n${CYAN}--- Filters instellen ---${NC}"
+
+# Onzichtbare bestanden uitsluiten
+read -p "Onzichtbare bestanden uitsluiten (bijv. .DS_Store, .git)? (j/n) [n]: " exclude_hidden
+if [[ "$exclude_hidden" == "j" || "$exclude_hidden" == "J" ]]; then
+    rsync_flags="$rsync_flags --exclude=\".*\" --exclude=\"*/.*\""
+fi
+
+# Extensies uitsluiten
+read -p "Specifieke extensies uitsluiten? (bijv. mp4, tmp, log of leeg laten): " exclude_exts
+if [[ -n "$exclude_exts" ]]; then
+    # Vervang komma's door spaties en itereer over extensies
+    for ext in ${exclude_exts//,/ }; do
+        # Verwijder eventuele voorloop-punt
+        ext="${ext#.}"
+        rsync_flags="$rsync_flags --exclude=\"*.$ext\""
+    done
+fi
+
+# Specifieke namen uitsluiten
+read -p "Specifieke mappen of bestanden uitsluiten? (bijv. node_modules, build of leeg laten): " exclude_names
+if [[ -n "$exclude_names" ]]; then
+    for name in ${exclude_names//,/ }; do
+        rsync_flags="$rsync_flags --exclude=\"$name\""
+    done
+fi
+
 # Construct rsync command
 # Notice we append '/' to source to copy contents into target_dir
+# We eval the rsync command to properly handle quoted flags like --exclude=".*"
 echo -e "\n${YELLOW}Uitvoeren: rsync $rsync_flags \"$source_dir/\" \"$target_dir/\"${NC}"
 echo -e "Druk op Enter om te starten of Ctrl+C om te annuleren..."
 read -r
 
-rsync $rsync_flags "$source_dir/" "$target_dir/"
+eval rsync $rsync_flags "\"$source_dir/\"" "\"$target_dir/\""
 
 echo -e "\n${GREEN}✅ Actie voltooid!${NC}"
