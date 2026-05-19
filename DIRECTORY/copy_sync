@@ -43,8 +43,8 @@ source_dir="${source_dir//\\ / }"
 # Remove trailing slash to be safe with rsync, we'll append it later if needed
 source_dir="${source_dir%/}"
 
-if [ ! -d "$source_dir" ] && [ ! -f "$source_dir" ]; then
-    echo -e "${RED}Fout: Bron '$source_dir' bestaat niet.${NC}"
+if [ ! -d "$source_dir" ]; then
+    echo -e "${RED}Fout: Bronmap '$source_dir' bestaat niet.${NC}"
     exit 1
 fi
 
@@ -73,7 +73,8 @@ echo "X) Annuleren"
 
 read -p "Keuze: " choice
 
-rsync_flags="-avh --progress"
+# Array voor veilige verwerking van argumenten
+rsync_flags=("-avh" "--progress")
 
 case "$choice" in
     1)
@@ -81,7 +82,7 @@ case "$choice" in
         ;;
     2)
         echo -e "\n${RED}Modus: Synchroniseren (--delete wordt toegevoegd)${NC}"
-        rsync_flags="$rsync_flags --delete"
+        rsync_flags+=("--delete")
         ;;
     [xX])
         echo -e "${YELLOW}Geannuleerd.${NC}"
@@ -99,7 +100,7 @@ echo -e "\n${CYAN}--- Filters instellen ---${NC}"
 # Onzichtbare bestanden uitsluiten
 read -p "Onzichtbare bestanden uitsluiten (bijv. .DS_Store, .git)? (j/n) [n]: " exclude_hidden
 if [[ "$exclude_hidden" == "j" || "$exclude_hidden" == "J" ]]; then
-    rsync_flags="$rsync_flags --exclude=\".*\" --exclude=\"*/.*\""
+    rsync_flags+=("--exclude=.*" "--exclude=*/.*")
 fi
 
 # Extensies uitsluiten
@@ -109,7 +110,7 @@ if [[ -n "$exclude_exts" ]]; then
     for ext in ${exclude_exts//,/ }; do
         # Verwijder eventuele voorloop-punt
         ext="${ext#.}"
-        rsync_flags="$rsync_flags --exclude=\"*.$ext\""
+        rsync_flags+=("--exclude=*.$ext")
     done
 fi
 
@@ -117,17 +118,16 @@ fi
 read -p "Specifieke mappen of bestanden uitsluiten? (bijv. node_modules, build of leeg laten): " exclude_names
 if [[ -n "$exclude_names" ]]; then
     for name in ${exclude_names//,/ }; do
-        rsync_flags="$rsync_flags --exclude=\"$name\""
+        rsync_flags+=("--exclude=$name")
     done
 fi
 
 # Construct rsync command
 # Notice we append '/' to source to copy contents into target_dir
-# We eval the rsync command to properly handle quoted flags like --exclude=".*"
-echo -e "\n${YELLOW}Uitvoeren: rsync $rsync_flags \"$source_dir/\" \"$target_dir/\"${NC}"
+echo -e "\n${YELLOW}Uitvoeren: rsync ${rsync_flags[*]} \"$source_dir/\" \"$target_dir/\"${NC}"
 echo -e "Druk op Enter om te starten of Ctrl+C om te annuleren..."
 read -r
 
-eval rsync $rsync_flags "\"$source_dir/\"" "\"$target_dir/\""
+rsync "${rsync_flags[@]}" "$source_dir/" "$target_dir/"
 
 echo -e "\n${GREEN}✅ Actie voltooid!${NC}"

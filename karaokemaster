@@ -1,12 +1,23 @@
 #!/bin/bash
-# Master Wrapper Script for KARAOKE tools
-
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "=========================================="
     echo "Usage: $0 [options]"
-    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    echo "Dit is een master wrapper script."
+    echo ""
+    echo "Beschikbare tools in dit menu:"
+    echo -e "Karaoke Master
+  1) convertcdg
+  2) musicinfo
+  3) musicorganizer
+  4) consolidate_per_artist"
+    echo ""
+    echo "Gebruik zonder argumenten om het interactieve menu te starten."
+    echo "=========================================="
     exit 0
 fi
+
+# Master Wrapper Script for KARAOKE tools
 
 KARAOKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/KARAOKE" && pwd)"
 
