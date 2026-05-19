@@ -150,13 +150,13 @@ while true; do
     echo "5) Network Master   (Port Scan & Utils)"
     echo "6) Data Master      (Convert/View CSV,JSON,XML)"
     echo "7) File Master      (Rename, Archive, Cleanup)"
-    echo "8) Text Master      (Stats, Diff, Merge)"
-    echo "9) Video Master     (Download & Clip Videos)"
-    echo "10) Intel Master    (Threat Intelligence Menu)"
-    echo "11) Cyber Master    (Phishing & Recon Tools)"
-    echo "12) Audio Master    (Audio Tools)"
-    echo "13) Karaoke Master  (Karaoke Tools)"
-    echo "14) Folder Master   (Directory Tools)"
+    echo "8) Folder Master   (Directory Tools)"
+    echo "9) Text Master      (Stats, Diff, Merge)"
+    echo "10) Video Master     (Download & Clip Videos)"
+    echo "11) Intel Master    (Threat Intelligence Menu)"
+    echo "12) Cyber Master    (Phishing & Recon Tools)"
+    echo "13) Audio Master    (Audio Tools)"
+    echo "14) Karaoke Master  (Karaoke Tools)"
     echo -e "-----------------------------------"
     echo "X) Exit"
 
@@ -169,13 +169,13 @@ while true; do
         5) launch_net ;;
         6) launch_data ;;
         7) launch_file ;;
-        8) launch_text ;;
-        9) launch_video ;;
-        10) launch_intel ;;
-        11) launch_cyber ;;
-        12) launch_audio ;;
-        13) launch_karaoke ;;
-        14) launch_folder ;;
+        8) launch_folder ;;
+        9) launch_text ;;
+        10) launch_video ;;
+        11) launch_intel ;;
+        12) launch_cyber ;;
+        13) launch_audio ;;
+        14) launch_karaoke ;;
         [xX]) exit 0 ;;
         *) echo "Invalid option." ; pause ;;
     esac
