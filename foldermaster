@@ -1,12 +1,23 @@
 #!/bin/bash
-# Master Wrapper Script for DIRECTORY tools
-
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "=========================================="
     echo "Usage: $0 [options]"
-    echo "This is a master wrapper script. Run without arguments for the interactive menu."
+    echo "Dit is een master wrapper script."
+    echo ""
+    echo "Beschikbare tools in dit menu:"
+    echo -e "Directory Master
+  1) lijst
+  2) csvlijst
+  3) copy_sync
+  4) compare_folders"
+    echo ""
+    echo "Gebruik zonder argumenten om het interactieve menu te starten."
+    echo "=========================================="
     exit 0
 fi
+
+# Master Wrapper Script for DIRECTORY tools
 
 DIR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/DIRECTORY" && pwd)"
 
@@ -31,6 +42,7 @@ while true; do
     echo "1) lijst"
     echo "2) csvlijst"
     echo "3) copy_sync"
+    echo "4) compare_folders"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -53,6 +65,12 @@ while true; do
             echo -e "${GREEN}Running copy_sync...${NC}"
             read -e -p "Enter arguments for copy_sync (or press enter for interactive): " args
             eval "\"$DIR_DIR/copy_sync\" $args"
+            pause
+            ;;
+        4)
+            echo -e "${GREEN}Running compare_folders...${NC}"
+            read -e -p "Enter arguments for compare_folders (or press enter for interactive): " args
+            eval "\"$DIR_DIR/compare_folders\" $args"
             pause
             ;;
         [xX])

@@ -1,0 +1,136 @@
+#!/bin/bash
+# ============================================================
+# COMPARE FOLDERS TOOL
+# Vergelijk twee mappen en toon ontbrekende bestanden
+# ============================================================
+
+set -u
+
+# Colors
+GREEN='\033[1;32m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'
+
+show_help() {
+    echo -e "${CYAN}=== Compare Folders Tool ===${NC}"
+    echo "Gebruik: $0 [opties]"
+    echo ""
+    echo "Een interactief script om twee mappen te vergelijken en"
+    echo "te zien welke bestanden in de doelmap ontbreken."
+    echo ""
+    echo "Opties:"
+    echo "  -h, --help    Toon dit helpbericht"
+    echo ""
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
+echo -e "${CYAN}================================================${NC}"
+echo -e "              ${CYAN}COMPARE FOLDERS TOOL${NC}"
+echo -e "${CYAN}================================================${NC}"
+
+# Vraag om de bronmap
+echo -e "${YELLOW}Geef de bronmap op (gebruik Tab voor autocomplete):${NC}"
+read -e -p "Bron: " source_dir
+source_dir="${source_dir//\\ / }"
+source_dir="${source_dir%/}"
+
+if [ ! -d "$source_dir" ]; then
+    echo -e "${RED}Fout: Bronmap '$source_dir' bestaat niet.${NC}"
+    exit 1
+fi
+
+# Vraag om de doelmap
+echo -e "\n${YELLOW}Geef de doelmap op (gebruik Tab voor autocomplete):${NC}"
+read -e -p "Doel: " target_dir
+target_dir="${target_dir//\\ / }"
+target_dir="${target_dir%/}"
+
+if [ ! -d "$target_dir" ]; then
+    echo -e "${RED}Fout: Doelmap '$target_dir' bestaat niet.${NC}"
+    exit 1
+fi
+
+# Filters
+echo -e "\n${CYAN}--- Filters instellen ---${NC}"
+rsync_flags=()
+
+read -p "Onzichtbare bestanden uitsluiten (bijv. .DS_Store, .git)? (j/n) [n]: " exclude_hidden
+if [[ "$exclude_hidden" == "j" || "$exclude_hidden" == "J" ]]; then
+    rsync_flags+=("--exclude=.*" "--exclude=*/.*")
+fi
+
+read -p "Specifieke extensies uitsluiten? (bijv. mp4, tmp, log of leeg laten): " exclude_exts
+if [[ -n "$exclude_exts" ]]; then
+    for ext in ${exclude_exts//,/ }; do
+        ext="${ext#.}"
+        rsync_flags+=("--exclude=*.$ext")
+    done
+fi
+
+read -p "Specifieke mappen of bestanden uitsluiten? (bijv. node_modules, build of leeg laten): " exclude_names
+if [[ -n "$exclude_names" ]]; then
+    for name in ${exclude_names//,/ }; do
+        rsync_flags+=("--exclude=$name")
+    done
+fi
+
+echo -e "\n${YELLOW}🔍 Vergelijken bezig...${NC}"
+
+# Gebruik rsync in dry-run mode (--dry-run) met out-format (%n geeft bestandsnamen)
+TMP_LIST=$(mktemp)
+
+# Voer uit en sla op, we negeren mappen door te grep-en voor bestanden (niet eindigend op /)
+rsync -an --out-format="%n" "${rsync_flags[@]}" "$source_dir/" "$target_dir/" | \
+    grep -v "/$" | grep -v "^sending incremental file list" | grep -v "^sent " | grep -v "^total size is" > "$TMP_LIST"
+
+AANTAL=$(wc -l < "$TMP_LIST" | tr -d ' ')
+
+if [ "$AANTAL" -eq 0 ]; then
+    echo -e "${GREEN}✅ De mappen zijn identiek (geen bestanden ontbreken of zijn verschillend in doel).${NC}"
+    rm "$TMP_LIST"
+    exit 0
+else
+    echo -e "${RED}⚠️ Er zijn $AANTAL bestanden die ontbreken of verschillen in het doel:${NC}"
+    head -n 20 "$TMP_LIST" | while read -r line; do
+        echo "  - $line"
+    done
+
+    if [ "$AANTAL" -gt 20 ]; then
+        echo "  ... en nog $((AANTAL - 20)) andere."
+    fi
+fi
+
+# CSV Exporteren
+echo -e "\n${CYAN}--- Resultaten exporteren ---${NC}"
+read -p "Wil je de resultaten opslaan in een CSV-bestand? (j/n) [n]: " export_csv
+
+if [[ "$export_csv" == "j" || "$export_csv" == "J" ]]; then
+    read -e -p "Geef de locatie en naam van het CSV-bestand (bijv. /pad/naar/ontbrekend.csv): " csv_file
+    csv_file="${csv_file//\\ / }"
+
+    if [[ -z "$csv_file" ]]; then
+        csv_file="$PWD/ontbrekende_bestanden.csv"
+        echo "Geen naam opgegeven, gebruik standaard: $csv_file"
+    fi
+
+    echo "Bestandsnaam,Pad,Status" > "$csv_file"
+
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            naam=$(basename "$line")
+            pad=$(dirname "$line")
+            # Omhul met quotes voor CSV
+            echo "\"$naam\",\"$pad\",\"Ontbreekt of gewijzigd\"" >> "$csv_file"
+        fi
+    done < "$TMP_LIST"
+
+    echo -e "${GREEN}✅ Resultaten opgeslagen in: $csv_file${NC}"
+fi
+
+rm "$TMP_LIST"
