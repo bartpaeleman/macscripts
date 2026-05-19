@@ -27,16 +27,21 @@ check_deps() {
 
     if [[ $RET -ne 0 ]]; then
         echo ""
-        if command -v pip3 &>/dev/null; then
-            read -p "Install missing dependencies? (y/n): " INSTALL
-            if [[ "$INSTALL" == "y" ]]; then
-                echo -e "${CYAN}Installing pandas pyyaml...${NC}"
-                pip3 install --user pandas pyyaml
-                echo -e "${GREEN}Done. Re-checking...${NC}"
-                python3 "$SCRIPT_DIR/data_utils.py" check
-            fi
+        read -p "Install missing dependencies using a local virtual environment? (y/n): " INSTALL
+        if [[ "$INSTALL" == "y" ]]; then
+            echo -e "${CYAN}Setting up virtual environment and installing pandas pyyaml...${NC}"
+            python3 -m venv "$SCRIPT_DIR/.venv"
+            source "$SCRIPT_DIR/.venv/bin/activate"
+            python3 -m pip install pandas pyyaml
+            echo -e "${GREEN}Done. Re-checking...${NC}"
+            python3 "$SCRIPT_DIR/data_utils.py" check
         else
-            echo -e "${RED}pip3 not found. Please install pandas and pyyaml manually.${NC}"
+            echo -e "${RED}Please install pandas and pyyaml manually.${NC}"
+        fi
+    else
+        # Ensure we use venv if it exists even if check passed previously
+        if [ -d "$SCRIPT_DIR/.venv" ]; then
+            source "$SCRIPT_DIR/.venv/bin/activate"
         fi
     fi
     pause

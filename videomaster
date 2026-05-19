@@ -231,9 +231,9 @@ update_dependencies() {
         elif command -v apt &> /dev/null; then
             echo -e "${CYAN}Linux (APT) gedetecteerd. Updaten...${NC}"
             sudo apt update && sudo apt install --only-upgrade yt-dlp ffmpeg
-        elif command -v pip &> /dev/null; then
-            echo -e "${CYAN}Python (pip) gedetecteerd. Updaten...${NC}"
-            pip install --upgrade yt-dlp
+        elif command -v pipx &> /dev/null; then
+            echo -e "${CYAN}Python (pipx) gedetecteerd. Updaten...${NC}"
+            pipx upgrade yt-dlp
         else
             echo -e "${RED}Kon pakketbeheerder niet automatisch bepalen. Update handmatig.${NC}"
         fi

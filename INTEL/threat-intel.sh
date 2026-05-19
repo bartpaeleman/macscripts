@@ -198,29 +198,27 @@ manage_parameters() {
 
 install_intel_deps() {
     echo -e "\n${CYAN}Installing Intel Master Dependencies...${NC}"
-    echo "This will try to install missing Python packages like 'python-dateutil'."
+    echo "This will create a local virtual environment and install missing Python packages like 'python-dateutil'."
 
     if command -v python3 &> /dev/null; then
-        echo "Attempting installation via python3 -m pip..."
-        if python3 -m pip install --user python-dateutil; then
+        echo "Attempting installation in virtual environment..."
+        python3 -m venv "$SCRIPT_DIR/.venv"
+        source "$SCRIPT_DIR/.venv/bin/activate"
+        if python3 -m pip install python-dateutil; then
             echo -e "${GREEN}Dependencies installed successfully.${NC}"
         else
-            echo -e "${YELLOW}pip not found. Attempting to bootstrap pip...${NC}"
-            if python3 -m ensurepip; then
-                python3 -m pip install --user python-dateutil
-                echo -e "${GREEN}Dependencies installed successfully.${NC}"
-            else
-                echo -e "${RED}Error: Failed to install pip or dependencies.${NC}"
-            fi
+            echo -e "${RED}Error: Failed to install pip or dependencies in virtual environment.${NC}"
         fi
-    elif command -v pip3 &> /dev/null; then
-        pip3 install --user python-dateutil
-        echo -e "${GREEN}Dependencies installed successfully.${NC}"
     else
-        echo -e "${RED}Error: Neither python3 nor pip3 is available in your PATH.${NC}"
+        echo -e "${RED}Error: python3 is not available in your PATH.${NC}"
     fi
     pause
 }
+
+# Always ensure we use venv if it exists
+if [ -d "$SCRIPT_DIR/.venv" ]; then
+    source "$SCRIPT_DIR/.venv/bin/activate"
+fi
 
 intelmaster_menu() {
     while true; do
