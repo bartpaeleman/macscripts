@@ -57,40 +57,66 @@ run_docker_silent() {
 }
 
 connect_docker() {
-    clear
-    echo -e "${CYAN}=== Selecteer Docker Omgeving ===${NC}"
-    echo "1) Lokaal (Localhost Mac/PC)"
-    echo "2) Remote NAS (Via SSH naar QNAP/Linux)"
-    read -p "Keuze: " env_choice
+    while true; do
+        clear
+        echo -e "${CYAN}=== Selecteer Docker Omgeving ===${NC}"
+        echo "1) Lokaal (Localhost Mac/PC)"
+        echo "2) Remote NAS (Via SSH naar QNAP/Linux)"
+        echo "3) Afsluiten"
+        read -p "Keuze: " env_choice
 
-    if [[ "$env_choice" == "2" ]]; then
-        DOCKER_MODE="remote"
-        read -e -p "SSH Host (IP of DNS): " SSH_HOST
-        read -e -p "SSH User [admin]: " input_user
-        SSH_USER=${input_user:-admin}
-        read -e -p "SSH Port [22]: " input_port
-        SSH_PORT=${input_port:-22}
+        if [[ "$env_choice" == "3" ]]; then
+            exit 0
+        elif [[ "$env_choice" == "2" ]]; then
+            DOCKER_MODE="remote"
+            read -e -p "SSH Host (IP of DNS): " SSH_HOST
+            read -e -p "SSH User [admin]: " input_user
+            SSH_USER=${input_user:-admin}
+            read -e -p "SSH Port [22]: " input_port
+            SSH_PORT=${input_port:-22}
 
-        echo -e "\n${YELLOW}Verbinden met $SSH_HOST...${NC}"
-        # Test SSH connection and docker presence
-        if ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "command -v docker" &> /dev/null; then
-            echo -e "${GREEN}✓ Connectie succesvol! Remote Docker gevonden.${NC}"
-            pause
-        else
-            echo -e "${RED}✗ Connectie mislukt of 'docker' is niet geïnstalleerd op de remote host.${NC}"
-            echo -e "Start lokaal op als fallback..."
+            echo -e "\n${YELLOW}Verbinden met $SSH_HOST...${NC}"
+            # Test SSH connection and docker presence
+            if ssh -o ConnectTimeout=5 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "command -v docker" &> /dev/null; then
+                echo -e "${GREEN}✓ Connectie succesvol! Remote Docker gevonden.${NC}"
+                pause
+                break
+            else
+                echo -e "${RED}✗ Connectie mislukt of 'docker' is niet geïnstalleerd op de remote host.${NC}"
+                read -p "Opnieuw proberen? (j/n): " retry
+                if [[ "$retry" == "j" || "$retry" == "J" ]]; then
+                    continue
+                else
+                    read -p "Lokaal opstarten als fallback? (j/n): " fallback
+                    if [[ "$fallback" == "j" || "$fallback" == "J" ]]; then
+                        DOCKER_MODE="local"
+                        if ! command -v docker &> /dev/null; then
+                            echo -e "${RED}Error: 'docker' command not found lokaal.${NC}"
+                            echo "Please ensure Docker Desktop / CLI is installed."
+                            pause
+                            continue
+                        else
+                            break
+                        fi
+                    else
+                        continue
+                    fi
+                fi
+            fi
+        elif [[ "$env_choice" == "1" ]]; then
             DOCKER_MODE="local"
-            pause
+            if ! command -v docker &> /dev/null; then
+                echo -e "${RED}Error: 'docker' command not found lokaal.${NC}"
+                echo "Please ensure Docker Desktop / CLI is installed."
+                pause
+                continue
+            else
+                break
+            fi
+        else
+            continue
         fi
-    else
-        DOCKER_MODE="local"
-        if ! command -v docker &> /dev/null; then
-            echo -e "${RED}Error: 'docker' command not found lokaal.${NC}"
-            echo "Please ensure Docker Desktop / CLI is installed."
-            pause
-            exit 1
-        fi
-    fi
+    done
 }
 
 show_header() {
