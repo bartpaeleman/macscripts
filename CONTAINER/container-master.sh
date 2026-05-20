@@ -7,6 +7,10 @@
 
 # set -e is disabled for interactive menu stability
 
+# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+set -o emacs
+bind '"\t": "\C-l\e\e"' 2>/dev/null || true
+
 # --- COLORS ---
 GREEN='\033[1;32m'
 CYAN='\033[1;36m'
@@ -19,48 +23,113 @@ BOLD='\033[1m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_DIR="${SCRIPT_DIR}/templates"
 
-# Check dependencies
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}Error: 'docker' command not found.${NC}"
-    echo "Please ensure Container Station is installed and Docker is in your PATH."
-    exit 1
-fi
-
-# --- FUNCTIONS ---
-
-show_header() {
-    clear
-    echo -e "${CYAN}${BOLD}===============================================================${NC}"
-    echo -e "       ${CYAN}${BOLD}CONTAINER MASTER CONTROL PANEL v1.0${NC}"
-    echo -e "${CYAN}${BOLD}===============================================================${NC}"
-    echo -e " System   : $(uname -s)"
-    echo -e " Docker   : $(docker --version | cut -d ' ' -f3 | tr -d ',')"
-    echo -e " Context  : $(docker context show)"
-    echo -e "${CYAN}${BOLD}===============================================================${NC}"
-}
+DOCKER_MODE="local"
+SSH_USER=""
+SSH_HOST=""
+SSH_PORT="22"
 
 pause() {
     echo -e "\n${YELLOW}Press Enter to continue...${NC}"
     read -r
 }
 
+# --- DOCKER WRAPPER ---
+# We use a custom function `run_docker` to route commands to the correct host.
+run_docker() {
+    if [[ "$DOCKER_MODE" == "remote" ]]; then
+        # Safely serialize arguments to preserve quotes over SSH
+        printf -v cmd_str "%q " docker "$@"
+        # For interactive shells (like logs -f or exec -it), we need -t
+        ssh -t -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$cmd_str"
+    else
+        docker "$@"
+    fi
+}
+
+# Silent wrapper for capturing output (no -t flag which adds carriage returns)
+run_docker_silent() {
+    if [[ "$DOCKER_MODE" == "remote" ]]; then
+        printf -v cmd_str "%q " docker "$@"
+        ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$cmd_str"
+    else
+        docker "$@"
+    fi
+}
+
+connect_docker() {
+    clear
+    echo -e "${CYAN}=== Selecteer Docker Omgeving ===${NC}"
+    echo "1) Lokaal (Localhost Mac/PC)"
+    echo "2) Remote NAS (Via SSH naar QNAP/Linux)"
+    read -p "Keuze: " env_choice
+
+    if [[ "$env_choice" == "2" ]]; then
+        DOCKER_MODE="remote"
+        read -e -p "SSH Host (IP of DNS): " SSH_HOST
+        read -e -p "SSH User [admin]: " input_user
+        SSH_USER=${input_user:-admin}
+        read -e -p "SSH Port [22]: " input_port
+        SSH_PORT=${input_port:-22}
+
+        echo -e "\n${YELLOW}Verbinden met $SSH_HOST...${NC}"
+        # Test SSH connection and docker presence
+        if ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "command -v docker" &> /dev/null; then
+            echo -e "${GREEN}✓ Connectie succesvol! Remote Docker gevonden.${NC}"
+            pause
+        else
+            echo -e "${RED}✗ Connectie mislukt of 'docker' is niet geïnstalleerd op de remote host.${NC}"
+            echo -e "Start lokaal op als fallback..."
+            DOCKER_MODE="local"
+            pause
+        fi
+    else
+        DOCKER_MODE="local"
+        if ! command -v docker &> /dev/null; then
+            echo -e "${RED}Error: 'docker' command not found lokaal.${NC}"
+            echo "Please ensure Docker Desktop / CLI is installed."
+            pause
+            exit 1
+        fi
+    fi
+}
+
+show_header() {
+    clear
+    echo -e "${CYAN}${BOLD}===============================================================${NC}"
+    echo -e "       ${CYAN}${BOLD}CONTAINER MASTER CONTROL PANEL v1.0${NC}"
+    echo -e "${CYAN}${BOLD}===============================================================${NC}"
+
+    local d_version
+    local context="Local"
+
+    if [[ "$DOCKER_MODE" == "remote" ]]; then
+        context="Remote ($SSH_USER@$SSH_HOST)"
+        d_version=$(run_docker_silent --version | cut -d ' ' -f3 | tr -d ',')
+    else
+        d_version=$(docker --version | cut -d ' ' -f3 | tr -d ',')
+    fi
+
+    echo -e " Host     : $context"
+    echo -e " Docker   : ${GREEN}${d_version:-Onbekend}${NC}"
+    echo -e "${CYAN}${BOLD}===============================================================${NC}"
+}
+
 # --- ACTIONS ---
 
 list_containers() {
     echo -e "\n${GREEN}=== Active Containers ===${NC}"
-    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    run_docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo -e "\n${YELLOW}=== All Containers (including stopped) ===${NC}"
-    docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}" | head -n 10
+    run_docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}" | head -n 10
     pause
 }
 
 view_logs() {
     echo -e "\n${CYAN}Select container to view logs:${NC}"
-    # Get list of container names - macOS compatible way
     containers=()
     while IFS= read -r line; do
-        containers+=("$line")
-    done < <(docker ps -a --format "{{.Names}}")
+        [[ -n "$line" ]] && containers+=("$line")
+    done < <(run_docker_silent ps -a --format "{{.Names}}" | tr -d '\r')
 
     if [[ ${#containers[@]} -eq 0 ]]; then
         echo "No containers found."
@@ -78,18 +147,19 @@ view_logs() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#containers[@]}" ]; then
         target="${containers[$((choice-1))]}"
         echo -e "\n${GREEN}Logs for $target (Last 50 lines, follow mode)...${NC}"
-        docker logs --tail 50 -f "$target"
+        # Interactive mode needs the normal run_docker wrapper (which has -t for ssh)
+        run_docker logs --tail 50 -f "$target"
     fi
 }
 
 manage_lifecycle() {
-    local action="$1" # start, stop, restart
+    local action="$1" # start, stop, restart, rm
     echo -e "\n${CYAN}Select container to $action:${NC}"
 
     containers=()
     while IFS= read -r line; do
-        containers+=("$line")
-    done < <(docker ps -a --format "{{.Names}}")
+        [[ -n "$line" ]] && containers+=("$line")
+    done < <(run_docker_silent ps -a --format "{{.Names}}" | tr -d '\r')
 
     if [[ ${#containers[@]} -eq 0 ]]; then
         echo "No containers found."
@@ -107,7 +177,7 @@ manage_lifecycle() {
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#containers[@]}" ]; then
         target="${containers[$((choice-1))]}"
         echo -e "\n${YELLOW}Executing $action on $target...${NC}"
-        docker "$action" "$target"
+        run_docker "$action" "$target"
         echo -e "${GREEN}Done.${NC}"
         pause
     fi
@@ -139,27 +209,42 @@ create_container() {
             read -p "Select Template: " t_idx
             if [[ "$t_idx" =~ ^[0-9]+$ ]] && [ "$t_idx" -ge 1 ] && [ "$t_idx" -le "${#templates[@]}" ]; then
                 selected="${templates[$((t_idx-1))]}"
-                read -p "Project Name (folder name): " p_name
+                read -e -p "Project Name (folder name): " p_name
 
                 if [[ -z "$p_name" ]]; then echo "Cancelled"; pause; return; fi
 
-                mkdir -p "$p_name"
-                cp "$selected" "$p_name/docker-compose.yml"
+                if [[ "$DOCKER_MODE" == "remote" ]]; then
+                    read -e -p "Remote pad (waar de map wordt aangemaakt, bv. /share/Container): " remote_base
+                    remote_base=${remote_base:-~}
+                    remote_dir="$remote_base/$p_name"
 
-                echo -e "${GREEN}Created folder '$p_name' with docker-compose.yml${NC}"
-                read -p "Start stack now? (y/n): " start_now
-                if [[ "$start_now" == "y" ]]; then
-                    cd "$p_name" && docker compose up -d
-                    cd ..
+                    echo -e "${YELLOW}Aanmaken project in $remote_dir op $SSH_HOST...${NC}"
+                    ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p \"$remote_dir\""
+                    scp -P "$SSH_PORT" "$selected" "$SSH_USER@$SSH_HOST:\"$remote_dir/docker-compose.yml\""
+
+                    read -p "Start stack nu? (j/n): " start_now
+                    if [[ "$start_now" == "j" || "$start_now" == "J" ]]; then
+                        ssh -t -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cd \"$remote_dir\" && docker compose up -d"
+                    fi
+                else
+                    mkdir -p "$p_name"
+                    cp "$selected" "$p_name/docker-compose.yml"
+
+                    echo -e "${GREEN}Created folder '$p_name' with docker-compose.yml${NC}"
+                    read -p "Start stack nu? (j/n): " start_now
+                    if [[ "$start_now" == "j" || "$start_now" == "J" ]]; then
+                        cd "$p_name" && docker compose up -d
+                        cd ..
+                    fi
                 fi
+                pause
             fi
             ;;
         2)
-            read -p "Image Name (e.g., nginx:alpine): " img
-            read -p "Container Name: " c_name
-            read -p "Port Mapping (host:container, e.g., 8080:80): " ports
+            read -e -p "Image Name (e.g., nginx:alpine): " img
+            read -e -p "Container Name: " c_name
+            read -e -p "Port Mapping (host:container, e.g., 8080:80): " ports
 
-            # Construct command using array for safety
             local cmd_args=("run" "-d" "--name" "$c_name")
 
             if [[ -n "$ports" ]]; then
@@ -169,7 +254,7 @@ create_container() {
             cmd_args+=("$img")
 
             echo -e "${YELLOW}Running: docker ${cmd_args[*]}${NC}"
-            docker "${cmd_args[@]}"
+            run_docker "${cmd_args[@]}"
             pause
             ;;
     esac
@@ -185,16 +270,18 @@ cleanup_system() {
     read -p "Select: " clean_opt
 
     case $clean_opt in
-        1) docker container prune ;;
-        2) docker image prune ;;
-        3) docker volume prune ;;
-        4) docker system prune -a ;;
+        1) run_docker container prune ;;
+        2) run_docker image prune ;;
+        3) run_docker volume prune ;;
+        4) run_docker system prune -a ;;
     esac
     pause
 }
 
-# --- MAIN LOOP ---
+# --- INITIALIZATION ---
+connect_docker
 
+# --- MAIN LOOP ---
 while true; do
     show_header
 
@@ -215,7 +302,8 @@ while true; do
     echo " 10) System Cleanup"
 
     echo -e "\n---------------------------------------------------------------"
-    echo " Q) Quit"
+    echo " C) Wissel Connectie (Local/Remote)"
+    echo " X) Quit"
     echo -e "${BOLD}===============================================================${NC}"
     read -p "Select action: " choice
 
@@ -223,25 +311,27 @@ while true; do
         1) list_containers ;;
         2) view_logs ;;
         3)
-           read -p "Container Name/ID: " c_id
+           read -e -p "Container Name/ID: " c_id
            if command -v python3 &> /dev/null; then
-               python3 "$SCRIPT_DIR/inspect_viewer.py" "$c_id" | less
+               # Pipe the output directly to the python viewer (handles both local and remote output)
+               run_docker_silent inspect "$c_id" | python3 "$SCRIPT_DIR/inspect_viewer.py" - | less
            else
-               docker inspect "$c_id" | less
+               run_docker_silent inspect "$c_id" | less
            fi
            ;;
         4) manage_lifecycle "start" ;;
         5) manage_lifecycle "stop" ;;
         6) manage_lifecycle "restart" ;;
         7)
-            read -p "Container Name: " c_name
+            read -e -p "Container Name: " c_name
             echo "Entering shell (type 'exit' to leave)..."
-            docker exec -it "$c_name" /bin/sh || docker exec -it "$c_name" /bin/bash
+            run_docker exec -it "$c_name" /bin/sh || run_docker exec -it "$c_name" /bin/bash
             ;;
         8) create_container ;;
         9) manage_lifecycle "rm" ;;
         10) cleanup_system ;;
-        [Qq]) clear; exit 0 ;;
+        [cC]) connect_docker ;;
+        [xXqQ]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
 done
