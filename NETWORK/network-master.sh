@@ -53,7 +53,7 @@ menu_interfaces() {
         echo "2) ip addr - Show IP Addresses (Linux/QNAP)"
         echo "3) route - Show Routing Table"
         echo "4) arp - Show ARP Table"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -69,7 +69,7 @@ menu_interfaces() {
                 fi
                 pause ;;
             4) check_cmd arp && arp -a | more; pause ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -82,7 +82,7 @@ menu_connectivity() {
         echo "1) ping - Test Connection"
         echo "2) traceroute - Trace Path"
         echo "3) geotrace - Trace Path with GeoIP Location"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -108,7 +108,7 @@ menu_connectivity() {
             3)
                 run_geotrace
                 ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -121,7 +121,7 @@ menu_dns() {
         echo "1) nslookup - Query Domain"
         echo "2) dig - Detailed Query"
         echo "3) dig short - Get IP only"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -148,7 +148,7 @@ menu_dns() {
                 dig +short "$domain"
                 pause
                 ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -162,7 +162,7 @@ menu_stats() {
         echo "2) netstat - Listening Ports"
         echo "3) ss - Socket Stats (TCP)"
         echo "4) ss - Socket Stats (UDP)"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -177,7 +177,7 @@ menu_stats() {
                 pause ;;
             3) check_cmd ss && ss -t -a | more; pause ;;
             4) check_cmd ss && ss -u -a | more; pause ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -191,7 +191,7 @@ menu_web() {
         echo "2) curl - Verbose Request"
         echo "3) wget - Download File"
         echo "4) Show Public IP (via ifconfig.me)"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -220,7 +220,7 @@ menu_web() {
                 echo ""
                 pause
                 ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -238,7 +238,7 @@ menu_python() {
         fi
 
         echo "1) Simple Port Scanner"
-        echo "X) Back"
+        echo "0) Back"
 
         read -p "Select: " choice
         case $choice in
@@ -251,7 +251,7 @@ menu_python() {
                 python3 "${SCRIPT_DIR}/scan_ports.py" "$ip" "$sp" "$ep"
                 pause
                 ;;
-            [Xx]) return ;;
+            [0]) return ;;
         esac
     done
 }
@@ -271,7 +271,7 @@ while true; do
     echo " 6) Advanced / Python Tools"
     echo " 7) GeoTrace (traceroute with GeoIP)"
     echo -e "---------------------------------------------------------------"
-    echo " Q) Quit"
+    echo " X) Exit"
     echo -e "${BOLD}===============================================================${NC}"
 
     read -p "Select action: " main_choice
@@ -284,7 +284,7 @@ while true; do
         5) menu_web ;;
         6) menu_python ;;
         7) run_geotrace ;;
-        [Qq]) clear; exit 0 ;;
+        [xX]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
 done

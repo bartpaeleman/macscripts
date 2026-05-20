@@ -514,16 +514,18 @@ download_menu() {
         echo -e " 6) Platform    : ${GREEN}$m_platform_display${NC}"
 
         echo -e "-----------------------------------"
-        echo -e " ${GREEN}S) START DOWNLOAD${NC}"
-        echo -e " B) Terug naar hoofdmenu"
+        echo -e " ${GREEN}9) START DOWNLOAD${NC}"
+        echo -e " 0) Terug naar hoofdmenu"
         echo ""
 
-        read -p "Kies een optie om aan te passen of (S)tart: " choice
+        read -p "Kies een optie om aan te passen of Start (9): " choice
 
         case ${choice:-} in
+
+
             1)
-                read -p "Type (U)RL of (B)atch bestand? [U/B]: " t_choice
-                if [ "$t_choice" = "b" ] || [ "$t_choice" = "B" ]; then
+                read -p "Type 1) URL of 2) Batch bestand?:  " t_choice
+                if [ "$t_choice" = "2" ]; then
                     m_target_type="batch"
                     read -p "Geef bestandspad: " m_target
                     m_clip_start="" # Fragments in batch is usually bad idea
@@ -631,14 +633,14 @@ download_menu() {
                         ;;
                 esac
                 ;;
-            [sS])
+            9)
                 if [ -z "$m_target" ]; then
                     echo -e "${RED}❌ Geen bron URL of bestand opgegeven!${NC}" ; sleep 2
                 else
                     execute_download "$m_target_type" "$m_target" "$m_media_type" "$m_format" "$m_clip_start" "$m_clip_end" "$m_subtitles" "$m_platform"
                 fi
                 ;;
-            [bB])
+            0)
                 break
                 ;;
             *)
@@ -673,13 +675,13 @@ select_local_media_file() {
             done
         fi
 
-        echo -e " ${GREEN}M)${NC} Andere map kiezen" >&2
+        echo -e " ${GREEN}10)${NC} Andere map kiezen" >&2
         echo -e " ${GREEN}0)${NC} Handmatig een pad invoeren" >&2
 
         local choice
         read -p "Kies een optie: " choice < /dev/tty
 
-        if [ "$choice" = "M" ] || [ "$choice" = "m" ]; then
+        if [ "$choice" = "10" ]; then
             read -e -p "Voer pad naar map in: " new_dir < /dev/tty
             if [ -d "$new_dir" ]; then
                 current_dir="$new_dir"
@@ -933,8 +935,8 @@ while true; do
     echo "5) Media Informatie Weergeven (Metadata)"
     echo "6) Lokaal Mediabestand Audio Extraheren (Extract Audio Only)"
     echo -e "-----------------------------------"
-    echo "U) Update Afhankelijkheden (yt-dlp/ffmpeg)"
-    echo "X) Afsluiten"
+    echo "9) Update Afhankelijkheden (yt-dlp/ffmpeg)"
+    echo "X) Exit"
     echo ""
 
     read -p "Maak uw keuze: " choice
@@ -945,7 +947,7 @@ while true; do
         4) check_dependencies && convert_local_file ;;
         5) check_dependencies && media_info ;;
         6) check_dependencies && extract_local_audio ;;
-        [uU]) update_dependencies ;;
+        9) update_dependencies ;;
         [xX]) exit 0 ;;
         *) echo -e "${RED}Ongeldige keuze.${NC}" ; pause ;;
     esac
