@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
 set -o emacs
 bind '"\t": "\C-l\e\e"' 2>/dev/null || true
 
@@ -18,19 +17,19 @@ pause() {
 
 check_dependencies() {
     if ! command -v id3v2 &> /dev/null; then
-        echo -e "${YELLOW}id3v2 is niet geïnstalleerd. Proberen te installeren via Homebrew...${NC}"
+        echo -e "${YELLOW}id3v2 not found. Try installing with Homebrew...${NC}"
         if command -v brew &> /dev/null; then
             brew install id3v2
         elif command -v apt-get &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y id3v2
         else
-            echo -e "${RED}Kan id3v2 niet automatisch installeren. Installeer het handmatig.${NC}"
+            echo -e "${RED}Can't install id3v2 automatically. Try manual installation.${NC}"
             pause
             exit 1
         fi
 
         if ! command -v id3v2 &> /dev/null; then
-             echo -e "${RED}Installatie mislukt. Zorg dat id3v2 is geïnstalleerd.${NC}"
+             echo -e "${RED}Installation failed. Make sure id3v2 is installed.${NC}"
              pause
              exit 1
         fi
@@ -38,16 +37,16 @@ check_dependencies() {
 }
 
 tag_from_filename() {
-    read -e -p "Geef directory met MP3 bestanden: " target_dir
+    read -e -p "Enter path to folder with MP3 files: " target_dir
     target_dir="${target_dir:-.}"
 
     if [ ! -d "$target_dir" ]; then
-        echo -e "${RED}Directory bestaat niet!${NC}"
+        echo -e "${RED}Folder not existing!${NC}"
         pause
         return
     fi
 
-    echo -e "${CYAN}Bestanden scannen en tags toepassen...${NC}"
+    echo -e "${CYAN}Scanning files and applying tags...${NC}"
 
     find "$target_dir" -type f -iname "*.mp3" | while read -r file; do
         filename=$(basename "$file" .mp3)
@@ -63,24 +62,24 @@ tag_from_filename() {
             echo -e "Tagging: ${GREEN}$filename${NC} -> Artist: ${YELLOW}$artist${NC}, Title: ${YELLOW}$title${NC}"
             id3v2 -a "$artist" -t "$title" "$file"
         else
-            echo -e "${RED}Overslaan: '$filename' voldoet niet aan '<artiest> - <song>' patroon.${NC}"
+            echo -e "${RED}Skipping: '$filename' doesn't fit '<artiest> - <song>' pattern.${NC}"
         fi
     done
-    echo -e "${GREEN}Klaar met taggen!${NC}"
+    echo -e "${GREEN}Tagging completed!${NC}"
     pause
 }
 
 rename_from_tags() {
-    read -e -p "Geef directory met MP3 bestanden: " target_dir
+    read -e -p "Enter path to folder with MP3 files: " target_dir
     target_dir="${target_dir:-.}"
 
     if [ ! -d "$target_dir" ]; then
-        echo -e "${RED}Directory bestaat niet!${NC}"
+        echo -e "${RED}Folder not existing!${NC}"
         pause
         return
     fi
 
-    echo -e "${CYAN}Bestanden scannen en hernoemen op basis van tags...${NC}"
+    echo -e "${CYAN}Scanning and renaming files based on tags...${NC}"
 
     find "$target_dir" -type f -iname "*.mp3" | while read -r file; do
         dir=$(dirname "$file")
@@ -104,18 +103,18 @@ rename_from_tags() {
             if [[ "$file" != "$new_path" ]]; then
                 if [[ ! -e "$new_path" ]]; then
                     mv "$file" "$new_path"
-                    echo -e "Hernoemd: ${GREEN}$(basename "$file")${NC} -> ${YELLOW}$new_name${NC}"
+                    echo -e "Renamed: ${GREEN}$(basename "$file")${NC} -> ${YELLOW}$new_name${NC}"
                 else
-                    echo -e "${RED}Overslaan: '$new_name' bestaat al.${NC}"
+                    echo -e "${RED}Skipped: '$new_name' already existing.${NC}"
                 fi
             else
-                echo -e "Overslaan: ${GREEN}$(basename "$file")${NC} heeft al de juiste naam."
+                echo -e "Skipping: ${GREEN}$(basename "$file")${NC} already named correctly."
             fi
         else
-            echo -e "${RED}Overslaan: '$(basename "$file")' mist id3v2 artist of title tag.${NC}"
+            echo -e "${RED}Skipping: '$(basename "$file")' missing id3v2 artist or title tag.${NC}"
         fi
     done
-    echo -e "${GREEN}Klaar met hernoemen!${NC}"
+    echo -e "${GREEN}Renaming completed!${NC}"
     pause
 }
 
@@ -126,9 +125,9 @@ while true; do
     echo -e "${CYAN}================================================${NC}"
     echo -e "         ${CYAN}MP3 TAG MANAGER (id3v2)${NC}"
     echo -e "${CYAN}================================================${NC}"
-    echo "1) Tag folder recursive gebaseerd op patroon (<artiest> - <song>)"
-    echo "2) Hernoem MP3's recursive gebaseerd op ID3 tags (<artiest> - <song>.mp3)"
-    echo "0) Terug"
+    echo "1) Tag folder recursive based on pattern (<artist> - <song>)"
+    echo "2) Rename MP3's recursively based on ID3 tags (<artist> - <song>.mp3)"
+    echo "0) Return"
     echo -e "${CYAN}================================================${NC}"
 
     read -p "Kies een optie: " choice
@@ -136,6 +135,6 @@ while true; do
         1) tag_from_filename ;;
         2) rename_from_tags ;;
         0) break ;;
-        *) echo -e "${RED}Ongeldige keuze.${NC}"; sleep 1 ;;
+        *) echo -e "${RED}Invalid choice.${NC}"; sleep 1 ;;
     esac
 done
