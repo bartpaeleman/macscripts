@@ -38,9 +38,9 @@ pause() {
 run_docker() {
     if [[ "$DOCKER_MODE" == "remote" ]]; then
         # Safely serialize arguments to preserve quotes over SSH
-        printf -v cmd_str "%q " docker "$@"
+        printf -v cmd_str "%q " "$@"
         # For interactive shells (like logs -f or exec -it), we need -t
-        ssh -t -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$cmd_str"
+        ssh -t -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "source /etc/profile 2>/dev/null || true; docker $cmd_str"
     else
         docker "$@"
     fi
@@ -49,8 +49,8 @@ run_docker() {
 # Silent wrapper for capturing output (no -t flag which adds carriage returns)
 run_docker_silent() {
     if [[ "$DOCKER_MODE" == "remote" ]]; then
-        printf -v cmd_str "%q " docker "$@"
-        ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$cmd_str"
+        printf -v cmd_str "%q " "$@"
+        ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "source /etc/profile 2>/dev/null || true; docker $cmd_str"
     else
         docker "$@"
     fi
