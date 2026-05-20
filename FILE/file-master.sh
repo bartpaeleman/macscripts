@@ -189,6 +189,7 @@ while true; do
     echo "3) Archive Directory (Zip/Tar)"
     echo "4) Cleanup (Duplicates/Empty Dirs)"
     echo "5) Compare Files"
+    echo "6) Advanced Rename (Brew 'rename')"
     echo "X) Exit"
 
     read -p "Select: " choice
@@ -198,6 +199,7 @@ while true; do
         3) archive_dir ;;
         4) cleanup_dir ;;
         5) compare_files ;;
+        6) "$SCRIPT_DIR/rename_advanced.sh" ;;
         [xX]) clear; exit 0 ;;
     esac
 done
