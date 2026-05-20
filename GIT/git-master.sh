@@ -276,7 +276,7 @@ while true; do
                 printf " 4) SEARCH CODE     - Find text in all files (grep)\n"
                 printf " 5) COMMIT FINDER   - Search commits by message\n"
                 printf " 6) BRANCH COMPARE  - See differences between branches\n"
-                read -p "Select command (X to return): " sub_choice
+                read -p "Select command (0 to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="1" ;;
                     2) choice="18" ;;
@@ -300,7 +300,7 @@ while true; do
                 printf " 8) RELEASE TAG     - Mark current state (v1.x)\n"
                 printf " 9) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
                 printf " 10) DELETE LOCAL    - Manually delete a local branch\n"
-                read -p "Select command (X to return): " sub_choice
+                read -p "Select command (0 to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="2" ;;
                     2) choice="3" ;;
@@ -325,7 +325,7 @@ while true; do
                 printf " 5) RESTORE COMMIT  - Checkout, Revert or Reset to a previous commit\n"
                 printf " 6) STASH PULL POP  - Stash local changes, pull and pop\n"
                 printf " 7) FORGET FILE     - Remove file from git cache\n"
-                read -p "Select command (X to return): " sub_choice
+                read -p "Select command (0 to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="6" ;;
                     2) choice="14" ;;
@@ -342,7 +342,7 @@ while true; do
                 printf "\n${YELLOW}${BOLD}[MAINTENANCE]${NC}\n"
                 printf " 1) BACKUP POINT     - Create local snapshot branch\n"
         printf " 2) RESTORE BACKUP   - Restore from a local snapshot branch\n"
-                read -p "Select command (X to return): " sub_choice
+                read -p "Select command (0 to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="7" ;;
             2) choice="25" ;;

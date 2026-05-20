@@ -42,24 +42,6 @@ typeset -a STILL_FAILED_DELETES
 DELETED_FILE_COUNT=0
 DELETED_BYTES=0
 DRY_RUN_BYTES=0
-DRY_RUN=false
-
-# --------------------------------------------------
-# DRY-RUN ARGUMENT
-# --------------------------------------------------
-
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-fi
-
-# --------------------------------------------------
-# BANNER
-# --------------------------------------------------
-
-echo ""
-echo "${BLD}uninstall.sh v$VERSION${RST}"
-[[ "$DRY_RUN" == true ]] && echo "${YLW}[DRY RUN – er wordt niets verwijderd]${RST}"
-echo ""
 
 # --------------------------------------------------
 # HULPFUNCTIES
@@ -97,6 +79,29 @@ ask_yn() {
         esac
     done
 }
+
+# --------------------------------------------------
+# DRY-RUN ARGUMENT
+# --------------------------------------------------
+
+if [[ "${1:-}" == "--dry-run" ]]; then
+    DRY_RUN=true
+else
+    if ask_yn "Wil je eerst een veilige simulatie draaien (dry-run)?"; then
+        DRY_RUN=true
+    else
+        DRY_RUN=false
+    fi
+fi
+
+# --------------------------------------------------
+# BANNER
+# --------------------------------------------------
+
+echo ""
+echo "${BLD}uninstall.sh v$VERSION${RST}"
+[[ "$DRY_RUN" == true ]] && echo "${YLW}[DRY RUN – er wordt niets verwijderd]${RST}"
+echo ""
 
 # --------------------------------------------------
 # APP-INVOER
