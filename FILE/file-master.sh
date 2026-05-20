@@ -190,6 +190,7 @@ while true; do
     echo "4) Cleanup (Duplicates/Empty Dirs)"
     echo "5) Compare Files"
     echo "6) Advanced Rename (Brew 'rename')"
+    echo "7) Fuzzy Finder (Brew 'fzf')"
     echo "X) Exit"
 
     read -p "Select: " choice
@@ -200,6 +201,7 @@ while true; do
         4) cleanup_dir ;;
         5) compare_files ;;
         6) "$SCRIPT_DIR/rename_advanced.sh" ;;
+        7) "$SCRIPT_DIR/fzf_manager.sh" ;;
         [xX]) clear; exit 0 ;;
     esac
 done
