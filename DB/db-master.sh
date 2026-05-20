@@ -103,6 +103,6 @@ while true; do
     case $choice in
         1) backup_db ;;
         2) analyze_db ;;
-        [Xx]) exit 0 ;;
+        [Xx]) clear; exit 0 ;;
     esac
 done

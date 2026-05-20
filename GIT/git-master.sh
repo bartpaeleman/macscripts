@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+set -o emacs
+bind '"\t": "\C-l\t"' 2>/dev/null || true
+
+
 # ============================================================
 # GIT MASTER CONTROL PANEL v7.2.0
 # Professional Git Workflow Manager for QNAP & macOS

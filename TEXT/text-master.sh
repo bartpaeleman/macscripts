@@ -125,6 +125,6 @@ while true; do
         3) text_compare ;;
         4) text_merge ;;
         5) case_convert ;;
-        [Xx]) exit 0 ;;
+        [Xx]) clear; exit 0 ;;
     esac
 done

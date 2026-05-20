@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+set -o emacs
+bind '"\t": "\C-l\t"' 2>/dev/null || true
+
+
 # ============================================================
 # VIDEO MASTER
 # Video Download & Segment Extraction Toolkit
