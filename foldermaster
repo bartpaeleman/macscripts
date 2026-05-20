@@ -12,10 +12,10 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo ""
     echo "Beschikbare tools in dit menu:"
     echo -e "Directory Master
-  1) lijst
-  2) csvlijst
-  3) copy_sync
-  4) compare_folders"
+  1) Folder lijst
+  2) Folder CSV lijst
+  3) Copy of Synch Folders
+  4) Vergelijk Folders"
     echo ""
     echo "Gebruik zonder argumenten om het interactieve menu te starten."
     echo "=========================================="
@@ -44,10 +44,10 @@ while true; do
     echo -e "         ${CYAN}DIRECTORY MASTER CONTROL PANEL${NC}"
     echo -e "${CYAN}================================================${NC}"
     echo -e "${GREEN}Available tools:${NC}"
-    echo "1) lijst"
-    echo "2) csvlijst"
-    echo "3) copy_sync"
-    echo "4) compare_folders"
+    echo "1) Folder lijst"
+    echo "2) Folder CSV lijst"
+    echo "3) Copy of Sync Folders"
+    echo "4) Vergelijk Folders"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -56,25 +56,25 @@ while true; do
     case "$choice" in
         1)
             echo -e "${GREEN}Running lijst...${NC}"
-            read -e -p "Enter arguments for lijst: " args
+            read -e -p "Geef argumenten: " args
             eval "\"$DIR_DIR/lijst\" $args"
             pause
             ;;
         2)
             echo -e "${GREEN}Running csvlijst...${NC}"
-            read -e -p "Enter arguments for csvlijst: " args
+            read -e -p "Geef argumenten: " args
             eval "\"$DIR_DIR/csvlijst\" $args"
             pause
             ;;
         3)
             echo -e "${GREEN}Running copy_sync...${NC}"
-            read -e -p "Enter arguments for copy_sync (or press enter for interactive): " args
+            read -e -p "Geef argumenten (of druk enter voor interactief): " args
             eval "\"$DIR_DIR/copy_sync\" $args"
             pause
             ;;
         4)
             echo -e "${GREEN}Running compare_folders...${NC}"
-            read -e -p "Enter arguments for compare_folders (or press enter for interactive): " args
+            read -e -p "Geef argumenten (of druk enter voor interactief): " args
             eval "\"$DIR_DIR/compare_folders\" $args"
             pause
             ;;
