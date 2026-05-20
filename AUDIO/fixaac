@@ -5,15 +5,15 @@
 # Ultra-robuust voor netwerkschijven (NAS), vreemde spaties en speciale tekens.
 
 if ! command -v ffmpeg &> /dev/null || ! command -v ffprobe &> /dev/null; then
-    echo "Fout: ffmpeg of ffprobe is niet geïnstalleerd. Installeer ze eerst met: brew install ffmpeg"
+    echo "Error: ffmpeg or ffprobe not installed. Install with: brew install ffmpeg"
     exit 1
 fi
 
-# Bepaal de doelmap (argument 1, of de huidige map indien leeg)
+# Define target folder (argument 1, or use current folder if empty)
 TARGET_DIR="${1:-.}"
 
 if [ ! -d "$TARGET_DIR" ]; then
-    echo "Fout: Map '$TARGET_DIR' bestaat niet."
+    echo "Error: Directory '$TARGET_DIR' not existing."
     exit 1
 fi
 
@@ -30,14 +30,14 @@ fix_mp4_audio() {
     local temp_file="${dir_path}/temp_aac_${filename}"
 
     echo ""
-    echo "=== Controleren: $filename ==="
+    echo "=== Check: $filename ==="
 
     # Controleer het audioformaat met een volledig geïsoleerde ffprobe aanroep
     local audio_codec
     audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null)
 
     if [ -z "$audio_codec" ]; then
-        echo "    → Geen audiostream gevonden of pad-fout, overslaan..."
+        echo "    → No audiostream found or error in path, skipping..."
         return 1
     fi
 
@@ -45,22 +45,22 @@ fix_mp4_audio() {
     audio_codec=$(echo "$audio_codec" | tr -d '[:space:]')
 
     if [ "$audio_codec" != "mp3" ]; then
-        echo "    → Audio is al '$audio_codec' (geen MP3), overslaan..."
+        echo "    → Audio already in '$audio_codec' format (not MP3), skipping..."
         return 2
     fi
 
-    echo "    → MP3 audio gedetecteerd! Converteren naar AAC..."
+    echo "    → MP3 audio detected! Converting to AAC..."
 
     # Converteer audio naar AAC, kopieer video stream
     if ffmpeg -hide_banner -loglevel error -i "$input_file" -c:v copy -c:a aac -b:a 192k -y "$temp_file" 2>/dev/null; then
         if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
             mv "$temp_file" "$input_file"
-            echo "    ✓ Succesvol vervangen door AAC versie!"
+            echo "    ✓ Replaced with AAC version!"
             return 0
         fi
     fi
 
-    echo "    ✗ Conversie mislukt voor dit bestand. Origineel blijft ongewijzigd."
+    echo "    ✗ Conversion failed for this file. Original untouched."
     rm -f "$temp_file"
     return 3
 }
@@ -69,25 +69,25 @@ fix_mp4_audio() {
 export -f fix_mp4_audio
 
 # Hoofdscript
-echo "MP4 MP3-naar-AAC Audio Fixer (NAS & Special Characters Safe)"
+echo "MP4 MP3-to-AAC Audio Fixer (NAS & Special Characters Safe)"
 echo "==========================================================="
-echo "Doelmap: $(cd "$TARGET_DIR" && pwd)"
-echo "Start tijd: $(date)"
+echo "Target directory: $(cd "$TARGET_DIR" && pwd)"
+echo "Starting time: $(date)"
 echo ""
 
 # Tel het aantal bestanden vooraf
 file_count=$(find "$TARGET_DIR" -iname "*.mp4" -not -name "._*" -type f | wc -l | tr -d ' ')
-echo "Aantal gevonden echte MP4-bestanden om te analyseren: $file_count"
+echo "Number of real MP4-files found to analyse: $file_count"
 echo "--------------------------------------------------"
 
 if [ "$file_count" -eq 0 ]; then
-    echo "Geen geldige .mp4 bestanden gevonden in deze map."
+    echo "No valid .mp4 files found in this directory."
 else
     # Schakel over naar -exec om de bestandspaden 100% intact te houden via het OS naar de functie
     find "$TARGET_DIR" -iname "*.mp4" -not -name "._*" -type f -exec bash -c 'fix_mp4_audio "$0"' {} \;
 fi
 
 echo ""
-echo "=== VOLTOOID ==="
-echo "Controleer de output hierboven voor de resultaten per bestand."
-echo "Eind tijd: $(date)"
+echo "=== COMPLETED ==="
+echo "Check output above for results per file."
+echo "Ending time: $(date)"
