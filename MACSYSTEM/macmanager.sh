@@ -21,6 +21,7 @@ while true; do
     echo "2) Zshrc Editor"
     echo "3) Auto Cleanup"
     echo "4) Clear Cache"
+    echo "5) Verwijder Applicatie"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -31,6 +32,7 @@ while true; do
         2) "$MACSYSTEM_DIR/zshrc_editor.sh" ;;
         3) "$MACSYSTEM_DIR/auto_cleanup.sh" ;;
         4) "$MACSYSTEM_DIR/clear_cache.sh" ;;
+        5) "$MACSYSTEM_DIR/uninstall.sh" ;;
         [xX])
             echo -e "${GREEN}Exiting...${NC}"
             clear
