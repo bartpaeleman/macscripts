@@ -130,6 +130,6 @@ while true; do
         3) convert_format ;;
         4) normalize_dataset ;;
         5) check_deps ;;
-        [Xx]) clear; exit 0 ;;
+        [xX]) clear; exit 0 ;;
     esac
 done

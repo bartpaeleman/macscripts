@@ -64,6 +64,10 @@ launch_audio() {
     bash "$ROOT_DIR/audiomaster"
 }
 
+launch_mac() {
+    bash "$ROOT_DIR/macmaster"
+}
+
 launch_karaoke() {
     bash "$ROOT_DIR/karaokemaster"
 }
@@ -157,6 +161,7 @@ while true; do
     echo "12) Cyber Master    (Phishing & Recon Tools)"
     echo "13) Audio Master    (Audio Tools)"
     echo "14) Karaoke Master  (Karaoke Tools)"
+    echo "15) Mac Master      (Mac System Tools)"
     echo -e "-----------------------------------"
     echo "X) Exit"
 
@@ -176,6 +181,7 @@ while true; do
         12) launch_cyber ;;
         13) launch_audio ;;
         14) launch_karaoke ;;
+        15) launch_mac ;;
         [xX]) clear; exit 0 ;;
         *) echo "Invalid option." ; pause ;;
     esac

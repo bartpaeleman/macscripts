@@ -115,7 +115,7 @@ print_colored_branch_list() {
             printf " ${GREEN}%2d) %s${NC}\n" "$i" "$branch"
         fi
     done
-    printf " ${RED}X) Cancel${NC}\n"
+    printf " ${RED}0) Cancel${NC}\n"
 }
 
 check_dirty() {
@@ -262,7 +262,7 @@ while true; do
         printf " 3. FIX           (Errors)\n"
         printf " 4. MAINTENANCE   (Backup & Restore)\n"
         printf -- "\n---------------------------------------------------------------\n"
-        printf " Q) QUIT\n"
+        printf " X) Exit\n"
         printf -- "${BOLD}===============================================================${NC}\n"
 
         read -p "Select action: " main_choice
@@ -270,87 +270,87 @@ while true; do
         case "$main_choice" in
             1)
                 printf "\n${YELLOW}${BOLD}[INFO]${NC}\n"
-                printf " a) DASHBOARD        - Status & History Overview (Scrollable)\n"
-                printf " b) DIFF VIEWER     - Compare changes between branches\n"
-                printf " c) FILE HISTORY    - Show all commits for a file\n"
-                printf " d) SEARCH CODE     - Find text in all files (grep)\n"
-                printf " e) COMMIT FINDER   - Search commits by message\n"
-                printf " f) BRANCH COMPARE  - See differences between branches\n"
+                printf " 1) DASHBOARD        - Status & History Overview (Scrollable)\n"
+                printf " 2) DIFF VIEWER     - Compare changes between branches\n"
+                printf " 3) FILE HISTORY    - Show all commits for a file\n"
+                printf " 4) SEARCH CODE     - Find text in all files (grep)\n"
+                printf " 5) COMMIT FINDER   - Search commits by message\n"
+                printf " 6) BRANCH COMPARE  - See differences between branches\n"
                 read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    [Aa]) choice="1" ;;
-                    [Bb]) choice="18" ;;
-                    [Cc]) choice="19" ;;
-                    [Dd]) choice="20" ;;
-                    [Ee]) choice="21" ;;
-                    [Ff]) choice="22" ;;
-                    [Xx]) continue ;;
+                    1) choice="1" ;;
+                    2) choice="18" ;;
+                    3) choice="19" ;;
+                    4) choice="20" ;;
+                    5) choice="21" ;;
+                    6) choice="22" ;;
+                    [0]) continue ;;
                     *) continue ;;
                 esac
                 ;;
             2)
                 printf "\n${YELLOW}${BOLD}[DEVELOPMENT]${NC}\n"
-                printf " a) CHECKOUT REPO    - Fetch & Switch to Repository (Branch)\n"
-                printf " b) BRANCH EXPLORER  - Switch or Create new Feature Branch\n"
-                printf " c) QUICK COMMIT     - Stage, Commit & Push active work\n"
-                printf " d) SYNC FETCH       - Pull remote changes into active branch\n"
-                printf " e) PREPARE UAT      - Merge branch into TEST (Overwrite conflicts)\n"
-                printf " f) STAGING PUSH     - Force sync current to DEV-STABLE\n"
-                printf " g) MERGE FIXES     - Process external fixes (Jules)\n"
-                printf " h) RELEASE TAG     - Mark current state (v1.x)\n"
-                printf " i) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
-                printf " j) DELETE LOCAL    - Manually delete a local branch\n"
+                printf " 1) CHECKOUT REPO    - Fetch & Switch to Repository (Branch)\n"
+                printf " 2) BRANCH EXPLORER  - Switch or Create new Feature Branch\n"
+                printf " 3) QUICK COMMIT     - Stage, Commit & Push active work\n"
+                printf " 4) SYNC FETCH       - Pull remote changes into active branch\n"
+                printf " 5) PREPARE UAT      - Merge branch into TEST (Overwrite conflicts)\n"
+                printf " 6) STAGING PUSH     - Force sync current to DEV-STABLE\n"
+                printf " 7) MERGE FIXES     - Process external fixes (Jules)\n"
+                printf " 8) RELEASE TAG     - Mark current state (v1.x)\n"
+                printf " 9) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
+                printf " 10) DELETE LOCAL    - Manually delete a local branch\n"
                 read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    [Aa]) choice="2" ;;
-                    [Bb]) choice="3" ;;
-                    [Cc]) choice="4" ;;
-                    [Dd]) choice="5" ;;
-                    [Ee]) choice="8" ;;
-                    [Ff]) choice="9" ;;
-                    [Gg]) choice="10" ;;
-                    [Hh]) choice="11" ;;
-                    [Ii]) choice="12" ;;
-                    [Jj]) choice="13" ;;
-                    [Xx]) continue ;;
+                    1) choice="2" ;;
+                    2) choice="3" ;;
+                    3) choice="4" ;;
+                    4) choice="5" ;;
+                    5) choice="8" ;;
+                    6) choice="9" ;;
+                    7) choice="10" ;;
+                    8) choice="11" ;;
+                    9) choice="12" ;;
+                    10) choice="13" ;;
+                    [0]) continue ;;
                     *) continue ;;
                 esac
                 ;;
             3)
                 printf "\n${YELLOW}${BOLD}[FIX]${NC}\n"
-                printf " a) SYNC FORCE       - Overwrite Local or GitHub (Conflict fix)\n"
-                printf " b) UNDO COMMIT     - Revert last commit (keep files)\n"
-                printf " c) FORCE RESET     - Wipe local and reset to main (CAUTION)\n"
-                printf " d) EMERGENCY       - Abort failed merges / Clear locks\n"
-                printf " e) RESTORE COMMIT  - Checkout, Revert or Reset to a previous commit\n"
-                printf " f) STASH PULL POP  - Stash local changes, pull and pop\n"
-                printf " g) FORGET FILE     - Remove file from git cache\n"
+                printf " 1) SYNC FORCE       - Overwrite Local or GitHub (Conflict fix)\n"
+                printf " 2) UNDO COMMIT     - Revert last commit (keep files)\n"
+                printf " 3) FORCE RESET     - Wipe local and reset to main (CAUTION)\n"
+                printf " 4) EMERGENCY       - Abort failed merges / Clear locks\n"
+                printf " 5) RESTORE COMMIT  - Checkout, Revert or Reset to a previous commit\n"
+                printf " 6) STASH PULL POP  - Stash local changes, pull and pop\n"
+                printf " 7) FORGET FILE     - Remove file from git cache\n"
                 read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    [Aa]) choice="6" ;;
-                    [Bb]) choice="14" ;;
-                    [Cc]) choice="15" ;;
-                    [Dd]) choice="16" ;;
-                    [Ee]) choice="17" ;;
-                    [Ff]) choice="23" ;;
-                    [Gg]) choice="24" ;;
-                    [Xx]) continue ;;
+                    1) choice="6" ;;
+                    2) choice="14" ;;
+                    3) choice="15" ;;
+                    4) choice="16" ;;
+                    5) choice="17" ;;
+                    6) choice="23" ;;
+                    7) choice="24" ;;
+                    [0]) continue ;;
                     *) continue ;;
                 esac
                 ;;
             4)
                 printf "\n${YELLOW}${BOLD}[MAINTENANCE]${NC}\n"
-                printf " a) BACKUP POINT     - Create local snapshot branch\n"
-        printf " b) RESTORE BACKUP   - Restore from a local snapshot branch\n"
+                printf " 1) BACKUP POINT     - Create local snapshot branch\n"
+        printf " 2) RESTORE BACKUP   - Restore from a local snapshot branch\n"
                 read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    [Aa]) choice="7" ;;
-            [Bb]) choice="25" ;;
-                    [Xx]) continue ;;
+                    1) choice="7" ;;
+            2) choice="25" ;;
+                    [0]) continue ;;
                     *) continue ;;
                 esac
                 ;;
-            [Ss]|[Qq])
+            [Ss]|[xX])
                 choice="$main_choice"
                 ;;
             *)
@@ -476,10 +476,10 @@ while true; do
         6) # SYNC FORCE
             [[ "$IN_GIT" = false ]] && continue
             git fetch origin || printf "${RED}Fetch failed.${NC}\n"
-            printf "A) OVERWRITE LOCAL (Loss of local work)\nB) FORCE PUSH (Loss of GitHub work)\nX) Cancel\n"
+            printf "1) OVERWRITE LOCAL (Loss of local work)\n2) FORCE PUSH (Loss of GitHub work)\n0) Cancel\n"
             read -p "Action: " fa_choice
-            [[ "$fa_choice" =~ [Aa] ]] && git reset --hard "origin/$CURRENT_BRANCH"
-            [[ "$fa_choice" =~ [Bb] ]] && git push origin "$CURRENT_BRANCH" --force
+            [[ "$fa_choice" =~ 1 ]] && git reset --hard "origin/$CURRENT_BRANCH"
+            [[ "$fa_choice" =~ 2 ]] && git push origin "$CURRENT_BRANCH" --force
             read -p "Sync complete. Enter..." junk ;;
 
         7) # BACKUP POINT
@@ -658,7 +658,7 @@ while true; do
             printf " 1) Checkout (Detached HEAD to test/look around)\n"
             printf " 2) Revert (Create new commit undoing changes)\n"
             printf " 3) Reset branch to here (Discard all changes after this commit)\n"
-            printf " X) Cancel\n"
+            printf " 0) Cancel\n"
 
             read -p "Select action: " restore_choice
 
@@ -884,7 +884,7 @@ while true; do
             printf "1) Checkout this backup as active branch\n"
             printf "2) Overwrite 'main' locally with this backup\n"
             printf "3) Overwrite 'main' locally AND force push to GitHub\n"
-            printf "X) Cancel\n"
+            printf "0) Cancel\n"
 
             read -p "Choose action: " restore_action
             case "$restore_action" in
@@ -909,7 +909,7 @@ while true; do
             esac
             read -p "Enter..." junk ;;
 
-        [Qq]) clear; exit 0 ;;
+        [xX]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
 

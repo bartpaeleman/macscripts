@@ -115,7 +115,7 @@ cleanup_dir() {
         echo "3) Remove Duplicates (MD5)"
         echo "4) Custom (Select combination)"
         echo "5) All of the above"
-        echo "X) Cancel"
+        echo "0) Cancel"
 
         read -p "Select Action: " clean_choice
 
@@ -133,7 +133,7 @@ cleanup_dir() {
                 [[ "$c_dupes" == "y" ]] && ARGS="$ARGS --dupes"
                 ;;
             5) ARGS="--junk --empty --dupes" ;;
-            [Xx]) return ;;
+            [0]) return ;;
             *) echo "Invalid option"; continue ;;
         esac
 
@@ -198,6 +198,6 @@ while true; do
         3) archive_dir ;;
         4) cleanup_dir ;;
         5) compare_files ;;
-        [Xx]) clear; exit 0 ;;
+        [xX]) clear; exit 0 ;;
     esac
 done

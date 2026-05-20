@@ -213,7 +213,7 @@ create_container() {
     echo -e "\n${CYAN}=== Create New Container Stack ===${NC}"
     echo "1) From Template (Docker Compose)"
     echo "2) Custom Image Run"
-    echo "X) Back"
+    echo "0) Back"
     read -p "Select: " method
 
     case $method in
@@ -292,7 +292,7 @@ cleanup_system() {
     echo "2) Prune Unused Images"
     echo "3) Prune Unused Volumes"
     echo "4) Prune Everything (System Prune -a)"
-    echo "X) Cancel"
+    echo "0) Cancel"
     read -p "Select: " clean_opt
 
     case $clean_opt in
@@ -328,8 +328,8 @@ while true; do
     echo " 10) System Cleanup"
 
     echo -e "\n---------------------------------------------------------------"
-    echo " C) Wissel Connectie (Local/Remote)"
-    echo " X) Quit"
+    echo " 11) Wissel Connectie (Local/Remote)"
+    echo " X) Exit"
     echo -e "${BOLD}===============================================================${NC}"
     read -p "Select action: " choice
 
@@ -356,8 +356,8 @@ while true; do
         8) create_container ;;
         9) manage_lifecycle "rm" ;;
         10) cleanup_system ;;
-        [cC]) connect_docker ;;
-        [xXqQ]) clear; exit 0 ;;
+        11) connect_docker ;;
+        [xX]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
 done

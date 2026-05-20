@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "=========================================="
+    echo "Usage: $0 [options]"
+    echo "Dit is een master wrapper script voor MACSYSTEM tools."
+    echo ""
+    echo "Beschikbare tools in dit menu:"
+    echo "  1) Crontab Manager"
+    echo "  2) Zshrc Editor"
+    echo "  3) Auto Cleanup"
+    echo "  4) Clear Cache"
+    echo ""
+    echo "Gebruik zonder argumenten om het interactieve menu te starten."
+    echo "=========================================="
+    exit 0
+fi
+
+MACSYSTEM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/MACSYSTEM" && pwd)"
+
+exec "$MACSYSTEM_DIR/macmanager.sh" "$@"
