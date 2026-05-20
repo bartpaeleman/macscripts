@@ -77,7 +77,7 @@ connect_docker() {
 
             echo -e "\n${YELLOW}Verbinden met $SSH_HOST...${NC}"
             # Test SSH connection and docker presence
-            if ssh -o ConnectTimeout=5 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "command -v docker" &> /dev/null; then
+            if ssh -o ConnectTimeout=5 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "source /etc/profile 2>/dev/null || true; command -v docker" &> /dev/null; then
                 echo -e "${GREEN}✓ Connectie succesvol! Remote Docker gevonden.${NC}"
                 pause
                 break
