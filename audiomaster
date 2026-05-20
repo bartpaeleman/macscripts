@@ -12,6 +12,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo ""
     echo "Beschikbare tools in dit menu:"
     echo -e "  1) fixaac"
+    echo -e "  2) mp3tag_manager"
     echo ""
     echo "Gebruik zonder argumenten om het interactieve menu te starten."
     echo "=========================================="
@@ -41,6 +42,7 @@ while true; do
     echo -e "${CYAN}================================================${NC}"
     echo -e "${GREEN}Available tools:${NC}"
     echo "1) fixaac"
+    echo "2) mp3tag_manager"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -52,6 +54,9 @@ while true; do
             read -e -p "Enter arguments for fixaac (e.g. source directory): " args
             eval "\"$AUDIO_DIR/fixaac\" $args"
             pause
+            ;;
+        2)
+            "$AUDIO_DIR/mp3tag_manager.sh"
             ;;
         [xX])
             echo -e "${GREEN}Exiting...${NC}"
