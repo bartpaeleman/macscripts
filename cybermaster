@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+set -o emacs
+bind '"\t": "\C-l\t"' 2>/dev/null || true
+
 # Master Wrapper Script for CYBER toolset
 
 CYBER_MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/CYBER" && pwd)"
@@ -110,6 +115,7 @@ run_interactive() {
                 ;;
             [xX])
                 echo -e "${GREEN}Exiting...${NC}"
+                clear
                 exit 0
                 ;;
             *)

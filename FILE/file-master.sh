@@ -198,6 +198,6 @@ while true; do
         3) archive_dir ;;
         4) cleanup_dir ;;
         5) compare_files ;;
-        [Xx]) exit 0 ;;
+        [Xx]) clear; exit 0 ;;
     esac
 done

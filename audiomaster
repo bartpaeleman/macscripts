@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+set -o emacs
+bind '"\t": "\C-l\t"' 2>/dev/null || true
+
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "=========================================="
     echo "Usage: $0 [options]"
@@ -50,6 +55,7 @@ while true; do
             ;;
         [xX])
             echo -e "${GREEN}Exiting...${NC}"
+            clear
             break
             ;;
         *)

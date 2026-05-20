@@ -176,7 +176,7 @@ while true; do
         12) launch_audio ;;
         13) launch_karaoke ;;
         14) launch_folder ;;
-        [xX]) exit 0 ;;
+        [xX]) clear; exit 0 ;;
         *) echo "Invalid option." ; pause ;;
     esac
 done

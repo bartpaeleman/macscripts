@@ -258,7 +258,7 @@ intelmaster_menu() {
             10) manage_list_option "exclusions" ;;
             11) manage_parameters ;;
             [dD]) install_intel_deps ;;
-            [xX]) break ;;
+            [xX]) clear; break ;;
             *) echo "Invalid option." ; pause ;;
         esac
     done
