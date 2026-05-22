@@ -76,7 +76,7 @@ while true; do
         1)
             bronmap="."
             doelmap="."
-            extensie="mp4"
+            extensie="*"
             output_file="bestanden_lijst.txt"
             recursief="y"
             paths="n"
@@ -103,7 +103,7 @@ while true; do
                 case "$config_choice" in
                     1) read_with_default "  New Source Dir: " "$bronmap" bronmap ;;
                     2) read_with_default "  New Target Dir: " "$doelmap" doelmap ;;
-                    3) read_with_default "  New Extension (no dot): " "$extensie" extensie ;;
+                    3) read_with_default "  New Extension (no dot, or * for all): " "$extensie" extensie ;;
                     4) read_with_default "  New Output File: " "$output_file" output_file ;;
                     5) read_with_default "  Recursive (y/n): " "$recursief" recursief ;;
                     6) read_with_default "  Show Paths (y/n): " "$paths" paths ;;
