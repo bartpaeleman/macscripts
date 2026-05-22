@@ -107,7 +107,8 @@ TMP_FILE=$(mktemp -t lijst_csv.XXXXXX)
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
 # Zoek bestanden
-echo -e "\n🔍 Zoeken naar bestanden in $BRONMAP..." >&2
+ABSOLUTE_BRONMAP=$(realpath "$BRONMAP" 2>/dev/null || cd "$BRONMAP" && pwd)
+echo -e "\n🔍 Zoeken naar bestanden in $ABSOLUTE_BRONMAP..." >&2
 if $FILTER_HIDDEN; then
     find "$BRONMAP" -type f ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
 else
@@ -168,6 +169,10 @@ to_csv() {
             # Print progress indicator op stderr
             printf "\r🔄 Verwerken bestand %d van %d..." "$teller" "$AANTAL_BESTANDEN" >&2
 
+            if [[ ! -f "$bestand" ]]; then
+                continue
+            fi
+
             ROW=()
             bestandsnaam=$(basename "$bestand")
             base_naam="${bestandsnaam%.*}"
@@ -224,6 +229,10 @@ to_csv() {
             teller=$((teller + 1))
             # Print progress indicator op stderr
             printf "\r🔄 Verwerken bestand %d van %d..." "$teller" "$AANTAL_BESTANDEN" >&2
+
+            if [[ ! -f "$bestand" ]]; then
+                continue
+            fi
 
             ROW=()
 
