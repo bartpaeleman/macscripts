@@ -75,7 +75,7 @@ echo -e "\n${CYAN}Kies een actie:${NC}"
 echo "1) Kopieer (Nieuwe of gewijzigde bestanden overzetten, niets wissen op doel)"
 echo "2) Synchroniseer 1-richting (Enkel nieuwe bestanden bijplaatsen, niets wissen, bestaande niet overschrijven)"
 echo "3) Synchroniseer exact (Doel exact gelijk maken aan bron, inclusief WISSEN op doel)"
-echo "0) Annuleren"
+echo "0) Cancel"
 
 read -p "Keuze: " choice
 

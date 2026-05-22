@@ -77,7 +77,7 @@ while true; do
                 echo -e "7) Verbose modus:    ${YELLOW}$verbose${NC} (j/n)"
                 echo ""
                 echo -e "${GREEN}S) START met deze instellingen${NC}"
-                echo -e "${RED}0) Annuleren en terug naar menu${NC}"
+                echo -e "${RED}0) Back${NC}"
                 echo ""
                 read -e -p "Keuze: " config_choice
 
@@ -133,7 +133,7 @@ while true; do
                 fi
                 echo ""
                 echo -e "${GREEN}S) START met deze instellingen${NC}"
-                echo -e "${RED}0) Annuleren en terug naar menu${NC}"
+                echo -e "${RED}0) Back${NC}"
                 echo ""
                 read -e -p "Keuze: " config_choice
 
