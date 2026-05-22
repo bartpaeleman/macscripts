@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
+# Make sure autocomplete doesn't clutter the screen by clearing it when you press Tab
 set -o emacs
 bind '"\t": "\C-l\e\e"' 2>/dev/null || true
 
@@ -8,16 +8,16 @@ bind '"\t": "\C-l\e\e"' 2>/dev/null || true
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "=========================================="
     echo "Usage: $0 [options]"
-    echo "Dit is een master wrapper script."
+    echo "This is a master wrapper script."
     echo ""
-    echo "Beschikbare tools in dit menu:"
+    echo "Tools available in this menu:"
     echo -e "Directory Master
   1) lijst
   2) csvlijst
   3) copy_sync
   4) compare_folders"
     echo ""
-    echo "Gebruik zonder argumenten om het interactieve menu te starten."
+    echo "Use without arguments to launch the interactive menu."
     echo "=========================================="
     exit 0
 fi
@@ -44,10 +44,10 @@ while true; do
     echo -e "         ${CYAN}DIRECTORY MASTER CONTROL PANEL${NC}"
     echo -e "${CYAN}================================================${NC}"
     echo -e "${GREEN}Available tools:${NC}"
-    echo "1) lijst"
-    echo "2) csvlijst"
-    echo "3) copy_sync"
-    echo "4) compare_folders"
+    echo "1) List files"
+    echo "2) List as CSV"
+    echo "3) Copy & Sync folders"
+    echo "4) Compare folders"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -55,26 +55,26 @@ while true; do
 
     case "$choice" in
         1)
-            echo -e "${GREEN}Running lijst...${NC}"
-            read -e -p "Enter arguments for lijst: " args
+            echo -e "${GREEN}Running...${NC}"
+            read -e -p "Enter arguments: " args
             eval "\"$DIR_DIR/lijst\" $args"
             pause
             ;;
         2)
             echo -e "${GREEN}Running csvlijst...${NC}"
-            read -e -p "Enter arguments for csvlijst: " args
+            read -e -p "Enter arguments: " args
             eval "\"$DIR_DIR/csvlijst\" $args"
             pause
             ;;
         3)
             echo -e "${GREEN}Running copy_sync...${NC}"
-            read -e -p "Enter arguments for copy_sync (or press enter for interactive): " args
+            read -e -p "Enter arguments (or press enter for interactive): " args
             eval "\"$DIR_DIR/copy_sync\" $args"
             pause
             ;;
         4)
             echo -e "${GREEN}Running compare_folders...${NC}"
-            read -e -p "Enter arguments for compare_folders (or press enter for interactive): " args
+            read -e -p "Enter arguments (or press enter for interactive): " args
             eval "\"$DIR_DIR/compare_folders\" $args"
             pause
             ;;
