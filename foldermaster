@@ -2,7 +2,8 @@
 
 # Make sure autocomplete doesn't clutter the screen by clearing it when you press Tab
 set -o emacs
-bind '"\t": "\C-l\e\e"' 2>/dev/null || true
+# Removed custom bind because \C-l breaks readline rendering inside persistent while loops
+# bind '"\t": "\C-l\e\e"' 2>/dev/null || true
 
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -65,43 +66,43 @@ while true; do
 
             while true; do
                 clear
-                echo -e "${CYAN}=== Bestanden Lijst Configuratie ===${NC}"
-                echo "Pas de instellingen aan en typ 'S' om te starten."
+                echo -e "${CYAN}=== File List Configuration ===${NC}"
+                echo "Adjust the settings below and type 'S' to start."
                 echo ""
-                echo -e "1) Bronmap:          ${YELLOW}$bronmap${NC}"
-                echo -e "2) Doelmap:          ${YELLOW}$doelmap${NC}"
-                echo -e "3) Extensie:         ${YELLOW}$extensie${NC}"
-                echo -e "4) Uitvoerbestand:   ${YELLOW}$output_file${NC}"
-                echo -e "5) Recursief:        ${YELLOW}$recursief${NC} (j/n)"
-                echo -e "6) Toon paden:       ${YELLOW}$paths${NC} (j/n)"
-                echo -e "7) Verbose modus:    ${YELLOW}$verbose${NC} (j/n)"
+                echo -e "1) Source Dir:       ${YELLOW}$bronmap${NC}"
+                echo -e "2) Target Dir:       ${YELLOW}$doelmap${NC}"
+                echo -e "3) Extension:        ${YELLOW}$extensie${NC}"
+                echo -e "4) Output File:      ${YELLOW}$output_file${NC}"
+                echo -e "5) Recursive:        ${YELLOW}$recursief${NC} (y/n)"
+                echo -e "6) Show Paths:       ${YELLOW}$paths${NC} (y/n)"
+                echo -e "7) Verbose Mode:     ${YELLOW}$verbose${NC} (y/n)"
                 echo ""
-                echo -e "${GREEN}S) START met deze instellingen${NC}"
+                echo -e "${GREEN}S) START with these settings${NC}"
                 echo -e "${RED}0) Back${NC}"
                 echo ""
-                read -e -p "Keuze: " config_choice
+                read -e -p "Choice: " config_choice
 
                 case "$config_choice" in
-                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) read -e -p "Nieuwe doelmap: " input; if [ -n "$input" ]; then doelmap="$input"; fi ;;
-                    3) read -e -p "Nieuwe extensie (zonder punt): " input; if [ -n "$input" ]; then extensie="$input"; fi ;;
-                    4) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
-                    5) read -e -p "Recursief (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then recursief="$input"; fi ;;
-                    6) read -e -p "Toon paden (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then paths="$input"; fi ;;
-                    7) read -e -p "Verbose (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then verbose="$input"; fi ;;
+                    1) echo -ne "  New Source Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) echo -ne "  New Target Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then doelmap="$input"; fi ;;
+                    3) echo -ne "  New Extension (no dot): "; read -e input < /dev/tty; if [ -n "$input" ]; then extensie="$input"; fi ;;
+                    4) echo -ne "  New Output File: "; read -e input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    5) echo -ne "  Recursive (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then recursief="$input"; fi ;;
+                    6) echo -ne "  Show Paths (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then paths="$input"; fi ;;
+                    7) echo -ne "  Verbose (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then verbose="$input"; fi ;;
                     [sS])
                         args=("-s" "$bronmap" "-t" "$doelmap" "-e" "$extensie" "-o" "$output_file")
                         if [[ "$recursief" =~ ^[nN] ]]; then args+=("-n"); fi
-                        if [[ "$paths" =~ ^[jJyY] ]]; then args+=("-p"); fi
-                        if [[ "$verbose" =~ ^[jJyY] ]]; then args+=("-v"); fi
+                        if [[ "$paths" =~ ^[yY] ]]; then args+=("-p"); fi
+                        if [[ "$verbose" =~ ^[yY] ]]; then args+=("-v"); fi
 
-                        echo -e "\n${GREEN}Lijst genereren...${NC}"
+                        echo -e "\n${GREEN}Generating list...${NC}"
                         "$DIR_DIR/lijst" "${args[@]}"
                         pause
                         break
                         ;;
                     0) break ;;
-                    *) echo -e "${RED}Ongeldige keuze.${NC}"; sleep 1 ;;
+                    *) echo -e "${RED}Invalid choice.${NC}"; sleep 1 ;;
                 esac
             done
             ;;
@@ -117,58 +118,58 @@ while true; do
 
             while true; do
                 clear
-                echo -e "${CYAN}=== CSV Lijst Configuratie ===${NC}"
-                echo "Pas de instellingen aan en typ 'S' om te starten."
+                echo -e "${CYAN}=== CSV List Configuration ===${NC}"
+                echo "Adjust the settings below and type 'S' to start."
                 echo ""
-                echo -e "1) Bronmap:              ${YELLOW}$bronmap${NC}"
-                echo -e "2) Uitvoerbestand:       ${YELLOW}$output_file${NC}"
-                echo -e "3) Filter hidden:        ${YELLOW}$filter_hidden${NC} (j/n)"
-                echo -e "4) Muziek DB modus:      ${YELLOW}$muziek${NC} (j/n)"
+                echo -e "1) Source Dir:           ${YELLOW}$bronmap${NC}"
+                echo -e "2) Output File:          ${YELLOW}$output_file${NC}"
+                echo -e "3) Filter Hidden:        ${YELLOW}$filter_hidden${NC} (y/n)"
+                echo -e "4) Music DB Mode:        ${YELLOW}$muziek${NC} (y/n)"
                 if [[ "$muziek" =~ ^[nN] ]]; then
-                    echo -e "\nKolommen om te tonen:"
-                    echo -e "5) Toon Bestandsnaam:    ${YELLOW}$toon_naam${NC} (j/n)"
-                    echo -e "6) Toon Bestandstype:    ${YELLOW}$toon_type${NC} (j/n)"
-                    echo -e "7) Toon Bestandsgrootte: ${YELLOW}$toon_grootte${NC} (j/n)"
-                    echo -e "8) Toon Volledig Pad:    ${YELLOW}$toon_pad${NC} (j/n)"
+                    echo -e "\nColumns to include:"
+                    echo -e "5) Show Filename:        ${YELLOW}$toon_naam${NC} (y/n)"
+                    echo -e "6) Show Filetype:        ${YELLOW}$toon_type${NC} (y/n)"
+                    echo -e "7) Show File Size:       ${YELLOW}$toon_grootte${NC} (y/n)"
+                    echo -e "8) Show Full Path:       ${YELLOW}$toon_pad${NC} (y/n)"
                 fi
                 echo ""
-                echo -e "${GREEN}S) START met deze instellingen${NC}"
+                echo -e "${GREEN}S) START with these settings${NC}"
                 echo -e "${RED}0) Back${NC}"
                 echo ""
-                read -e -p "Keuze: " config_choice
+                read -e -p "Choice: " config_choice
 
                 case "$config_choice" in
-                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
-                    3) read -e -p "Filter hidden files (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then filter_hidden="$input"; fi ;;
-                    4) read -e -p "Muziek DB modus (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then muziek="$input"; fi ;;
-                    5) if [[ "$muziek" =~ ^[nN] ]]; then read -e -p "Toon Bestandsnaam (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_naam="$input"; fi; fi ;;
-                    6) if [[ "$muziek" =~ ^[nN] ]]; then read -e -p "Toon Bestandstype (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_type="$input"; fi; fi ;;
-                    7) if [[ "$muziek" =~ ^[nN] ]]; then read -e -p "Toon Bestandsgrootte (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_grootte="$input"; fi; fi ;;
-                    8) if [[ "$muziek" =~ ^[nN] ]]; then read -e -p "Toon Volledig Pad (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_pad="$input"; fi; fi ;;
+                    1) echo -ne "  New Source Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) echo -ne "  New Output File: "; read -e input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    3) echo -ne "  Filter hidden files (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then filter_hidden="$input"; fi ;;
+                    4) echo -ne "  Music DB Mode (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then muziek="$input"; fi ;;
+                    5) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Filename (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_naam="$input"; fi; fi ;;
+                    6) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Filetype (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_type="$input"; fi; fi ;;
+                    7) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show File Size (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_grootte="$input"; fi; fi ;;
+                    8) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Full Path (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_pad="$input"; fi; fi ;;
                     [sS])
                         args=("-d" "$bronmap" "-o" "$output_file")
 
-                        if [[ "$muziek" =~ ^[jJyY] ]]; then
+                        if [[ "$muziek" =~ ^[yY] ]]; then
                             args+=("-m")
                         else
-                            if [[ "$toon_naam" =~ ^[jJyY] ]]; then args+=("-n"); fi
-                            if [[ "$toon_type" =~ ^[jJyY] ]]; then args+=("-t"); fi
-                            if [[ "$toon_grootte" =~ ^[jJyY] ]]; then args+=("-s"); fi
-                            if [[ "$toon_pad" =~ ^[jJyY] ]]; then args+=("-p"); fi
+                            if [[ "$toon_naam" =~ ^[yY] ]]; then args+=("-n"); fi
+                            if [[ "$toon_type" =~ ^[yY] ]]; then args+=("-t"); fi
+                            if [[ "$toon_grootte" =~ ^[yY] ]]; then args+=("-s"); fi
+                            if [[ "$toon_pad" =~ ^[yY] ]]; then args+=("-p"); fi
                         fi
 
-                        if [[ "$filter_hidden" =~ ^[jJyY] ]]; then
+                        if [[ "$filter_hidden" =~ ^[yY] ]]; then
                             args+=("-f")
                         fi
 
-                        echo -e "\n${GREEN}CSV lijst genereren...${NC}"
+                        echo -e "\n${GREEN}Generating CSV list...${NC}"
                         "$DIR_DIR/csvlijst" "${args[@]}"
                         pause
                         break
                         ;;
                     0) break ;;
-                    *) echo -e "${RED}Ongeldige keuze.${NC}"; sleep 1 ;;
+                    *) echo -e "${RED}Invalid choice.${NC}"; sleep 1 ;;
                 esac
             done
             ;;
