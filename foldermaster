@@ -82,10 +82,10 @@ while true; do
                 read -p "Keuze: " config_choice
 
                 case "$config_choice" in
-                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) read -e -p "Nieuwe doelmap: " input; if [ -n "$input" ]; then doelmap="$input"; fi ;;
-                    3) read -p "Nieuwe extensie (zonder punt): " input; if [ -n "$input" ]; then extensie="$input"; fi ;;
-                    4) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    1) read -e -p "Nieuwe bronmap: " input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) read -e -p "Nieuwe doelmap: " input < /dev/tty; if [ -n "$input" ]; then doelmap="$input"; fi ;;
+                    3) read -p "Nieuwe extensie (zonder punt): " input < /dev/tty; if [ -n "$input" ]; then extensie="$input"; fi ;;
+                    4) read -e -p "Nieuwe uitvoerbestand naam: " input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
                     5) read -p "Recursief (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then recursief="$input"; fi ;;
                     6) read -p "Toon paden (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then paths="$input"; fi ;;
                     7) read -p "Verbose (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then verbose="$input"; fi ;;
@@ -138,8 +138,8 @@ while true; do
                 read -p "Keuze: " config_choice
 
                 case "$config_choice" in
-                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    1) read -e -p "Nieuwe bronmap: " input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) read -e -p "Nieuwe uitvoerbestand naam: " input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
                     3) read -p "Filter hidden files (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then filter_hidden="$input"; fi ;;
                     4) read -p "Muziek DB modus (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then muziek="$input"; fi ;;
                     5) if [[ "$muziek" =~ ^[nN] ]]; then read -p "Toon Bestandsnaam (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_naam="$input"; fi; fi ;;
