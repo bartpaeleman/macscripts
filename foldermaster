@@ -55,89 +55,122 @@ while true; do
 
     case "$choice" in
         1)
-            echo -e "\n${CYAN}=== Bestanden Lijst Configuratie ===${NC}"
+            bronmap="."
+            doelmap="."
+            extensie="mp4"
+            output_file="bestanden_lijst.txt"
+            recursief="j"
+            paths="n"
+            verbose="n"
 
-            read -e -p "Wat is de bronmap? [huidige map]: " bronmap < /dev/tty
-            bronmap=${bronmap:-.}
+            while true; do
+                clear
+                echo -e "${CYAN}=== Bestanden Lijst Configuratie ===${NC}"
+                echo "Pas de instellingen aan en typ 'S' om te starten."
+                echo ""
+                echo -e "1) Bronmap:          ${YELLOW}$bronmap${NC}"
+                echo -e "2) Doelmap:          ${YELLOW}$doelmap${NC}"
+                echo -e "3) Extensie:         ${YELLOW}$extensie${NC}"
+                echo -e "4) Uitvoerbestand:   ${YELLOW}$output_file${NC}"
+                echo -e "5) Recursief:        ${YELLOW}$recursief${NC} (j/n)"
+                echo -e "6) Toon paden:       ${YELLOW}$paths${NC} (j/n)"
+                echo -e "7) Verbose modus:    ${YELLOW}$verbose${NC} (j/n)"
+                echo ""
+                echo -e "${GREEN}S) START met deze instellingen${NC}"
+                echo -e "${RED}0) Annuleren en terug naar menu${NC}"
+                echo ""
+                read -p "Keuze: " config_choice
 
-            read -e -p "Wat is de doelmap voor het uitvoerbestand? [huidige map]: " doelmap < /dev/tty
-            doelmap=${doelmap:-.}
+                case "$config_choice" in
+                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) read -e -p "Nieuwe doelmap: " input; if [ -n "$input" ]; then doelmap="$input"; fi ;;
+                    3) read -p "Nieuwe extensie (zonder punt): " input; if [ -n "$input" ]; then extensie="$input"; fi ;;
+                    4) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    5) read -p "Recursief (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then recursief="$input"; fi ;;
+                    6) read -p "Toon paden (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then paths="$input"; fi ;;
+                    7) read -p "Verbose (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then verbose="$input"; fi ;;
+                    [sS])
+                        args=("-s" "$bronmap" "-t" "$doelmap" "-e" "$extensie" "-o" "$output_file")
+                        if [[ "$recursief" =~ ^[nN] ]]; then args+=("-n"); fi
+                        if [[ "$paths" =~ ^[jJyY] ]]; then args+=("-p"); fi
+                        if [[ "$verbose" =~ ^[jJyY] ]]; then args+=("-v"); fi
 
-            read -e -p "Welke extensie wil je zoeken? (zonder punt) [mp4]: " extensie < /dev/tty
-            extensie=${extensie:-mp4}
-
-            read -e -p "Wat is de naam van het uitvoerbestand? [bestanden_lijst.txt]: " output_file < /dev/tty
-            output_file=${output_file:-bestanden_lijst.txt}
-
-            read -e -p "Wil je recursief zoeken in submappen? (j/n) [j]: " recursief
-            recursief=${recursief:-j}
-
-            read -e -p "Wil je padinformatie includeren in de lijst? (j/n) [n]: " paths
-            paths=${paths:-n}
-
-            read -e -p "Wil je gedetailleerde (verbose) output zien? (j/n) [n]: " verbose
-            verbose=${verbose:-n}
-
-            args=("-s" "$bronmap" "-t" "$doelmap" "-e" "$extensie" "-o" "$output_file")
-            if [[ "$recursief" =~ ^[nN] ]]; then
-                args+=("-n")
-            fi
-            if [[ "$paths" =~ ^[jJyY] ]]; then
-                args+=("-p")
-            fi
-            if [[ "$verbose" =~ ^[jJyY] ]]; then
-                args+=("-v")
-            fi
-
-            echo -e "\n${GREEN}Lijst genereren...${NC}"
-            "$DIR_DIR/lijst" "${args[@]}"
-            pause
+                        echo -e "\n${GREEN}Lijst genereren...${NC}"
+                        "$DIR_DIR/lijst" "${args[@]}"
+                        pause
+                        break
+                        ;;
+                    0) break ;;
+                    *) echo -e "${RED}Ongeldige keuze.${NC}"; sleep 1 ;;
+                esac
+            done
             ;;
         2)
-            echo -e "\n${CYAN}=== CSV Lijst Configuratie ===${NC}"
+            bronmap="."
+            output_file="output.csv"
+            muziek="n"
+            toon_naam="j"
+            toon_type="j"
+            toon_grootte="j"
+            toon_pad="n"
+            filter_hidden="j"
 
-            read -e -p "Wat is de bronmap? [huidige map]: " bronmap < /dev/tty
-            bronmap=${bronmap:-.}
+            while true; do
+                clear
+                echo -e "${CYAN}=== CSV Lijst Configuratie ===${NC}"
+                echo "Pas de instellingen aan en typ 'S' om te starten."
+                echo ""
+                echo -e "1) Bronmap:              ${YELLOW}$bronmap${NC}"
+                echo -e "2) Uitvoerbestand:       ${YELLOW}$output_file${NC}"
+                echo -e "3) Filter hidden:        ${YELLOW}$filter_hidden${NC} (j/n)"
+                echo -e "4) Muziek DB modus:      ${YELLOW}$muziek${NC} (j/n)"
+                if [[ "$muziek" =~ ^[nN] ]]; then
+                    echo -e "\nKolommen om te tonen:"
+                    echo -e "5) Toon Bestandsnaam:    ${YELLOW}$toon_naam${NC} (j/n)"
+                    echo -e "6) Toon Bestandstype:    ${YELLOW}$toon_type${NC} (j/n)"
+                    echo -e "7) Toon Bestandsgrootte: ${YELLOW}$toon_grootte${NC} (j/n)"
+                    echo -e "8) Toon Volledig Pad:    ${YELLOW}$toon_pad${NC} (j/n)"
+                fi
+                echo ""
+                echo -e "${GREEN}S) START met deze instellingen${NC}"
+                echo -e "${RED}0) Annuleren en terug naar menu${NC}"
+                echo ""
+                read -p "Keuze: " config_choice
 
-            read -e -p "Wat is de naam van het uitvoerbestand? [output.csv]: " output_file < /dev/tty
-            output_file=${output_file:-output.csv}
+                case "$config_choice" in
+                    1) read -e -p "Nieuwe bronmap: " input; if [ -n "$input" ]; then bronmap="$input"; fi ;;
+                    2) read -e -p "Nieuwe uitvoerbestand naam: " input; if [ -n "$input" ]; then output_file="$input"; fi ;;
+                    3) read -p "Filter hidden files (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then filter_hidden="$input"; fi ;;
+                    4) read -p "Muziek DB modus (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then muziek="$input"; fi ;;
+                    5) if [[ "$muziek" =~ ^[nN] ]]; then read -p "Toon Bestandsnaam (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_naam="$input"; fi; fi ;;
+                    6) if [[ "$muziek" =~ ^[nN] ]]; then read -p "Toon Bestandstype (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_type="$input"; fi; fi ;;
+                    7) if [[ "$muziek" =~ ^[nN] ]]; then read -p "Toon Bestandsgrootte (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_grootte="$input"; fi; fi ;;
+                    8) if [[ "$muziek" =~ ^[nN] ]]; then read -p "Toon Volledig Pad (j/n): " input; if [[ "$input" =~ ^[jJnNyY]$ ]]; then toon_pad="$input"; fi; fi ;;
+                    [sS])
+                        args=("-d" "$bronmap" "-o" "$output_file")
 
-            read -e -p "Wil je de Muziek Database modus gebruiken (ARTIEST, TITEL, MAP, etc.)? (j/n) [n]: " muziek
-            muziek=${muziek:-n}
+                        if [[ "$muziek" =~ ^[jJyY] ]]; then
+                            args+=("-m")
+                        else
+                            if [[ "$toon_naam" =~ ^[jJyY] ]]; then args+=("-n"); fi
+                            if [[ "$toon_type" =~ ^[jJyY] ]]; then args+=("-t"); fi
+                            if [[ "$toon_grootte" =~ ^[jJyY] ]]; then args+=("-s"); fi
+                            if [[ "$toon_pad" =~ ^[jJyY] ]]; then args+=("-p"); fi
+                        fi
 
-            args=("-d" "$bronmap" "-o" "$output_file")
+                        if [[ "$filter_hidden" =~ ^[jJyY] ]]; then
+                            args+=("-f")
+                        fi
 
-            if [[ "$muziek" =~ ^[jJyY] ]]; then
-                args+=("-m")
-            else
-                echo -e "\nWelke kolommen wil je opnemen in de CSV?"
-                read -e -p "  Toon BESTANDSNAAM? (j/n) [j]: " toon_naam
-                toon_naam=${toon_naam:-j}
-                if [[ "$toon_naam" =~ ^[jJyY] ]]; then args+=("-n"); fi
-
-                read -e -p "  Toon BESTANDSTYPE? (j/n) [j]: " toon_type
-                toon_type=${toon_type:-j}
-                if [[ "$toon_type" =~ ^[jJyY] ]]; then args+=("-t"); fi
-
-                read -e -p "  Toon BESTANDSGROOTTE? (j/n) [j]: " toon_grootte
-                toon_grootte=${toon_grootte:-j}
-                if [[ "$toon_grootte" =~ ^[jJyY] ]]; then args+=("-s"); fi
-
-                read -e -p "  Toon VOLLEDIG PAD? (j/n) [n]: " toon_pad
-                toon_pad=${toon_pad:-n}
-                if [[ "$toon_pad" =~ ^[jJyY] ]]; then args+=("-p"); fi
-            fi
-
-            echo ""
-            read -e -p "Wil je onzichtbare (hidden) bestanden eruit filteren? (j/n) [j]: " filter_hidden
-            filter_hidden=${filter_hidden:-j}
-            if [[ "$filter_hidden" =~ ^[jJyY] ]]; then
-                args+=("-f")
-            fi
-
-            echo -e "\n${GREEN}CSV lijst genereren...${NC}"
-            "$DIR_DIR/csvlijst" "${args[@]}"
-            pause
+                        echo -e "\n${GREEN}CSV lijst genereren...${NC}"
+                        "$DIR_DIR/csvlijst" "${args[@]}"
+                        pause
+                        break
+                        ;;
+                    0) break ;;
+                    *) echo -e "${RED}Ongeldige keuze.${NC}"; sleep 1 ;;
+                esac
+            done
             ;;
         3)
             echo -e "${GREEN}Running copy_sync...${NC}"
