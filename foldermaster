@@ -39,6 +39,24 @@ pause() {
     read -r
 }
 
+read_with_default() {
+    local prompt="$1"
+    local default="$2"
+    local var_name="$3"
+    local temp_var=""
+
+    if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
+        read -e -i "$default" -p "$prompt" temp_var < /dev/tty
+    else
+        echo -ne "$prompt [$default]: "
+        read -e temp_var < /dev/tty
+    fi
+
+    if [ -n "$temp_var" ]; then
+        eval "$var_name=\"\$temp_var\""
+    fi
+}
+
 while true; do
     clear
     echo -e "${CYAN}================================================${NC}"
@@ -60,7 +78,7 @@ while true; do
             doelmap="."
             extensie="mp4"
             output_file="bestanden_lijst.txt"
-            recursief="j"
+            recursief="y"
             paths="n"
             verbose="n"
 
@@ -83,13 +101,13 @@ while true; do
                 read -e -p "Choice: " config_choice
 
                 case "$config_choice" in
-                    1) echo -ne "  New Source Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) echo -ne "  New Target Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then doelmap="$input"; fi ;;
-                    3) echo -ne "  New Extension (no dot): "; read -e input < /dev/tty; if [ -n "$input" ]; then extensie="$input"; fi ;;
-                    4) echo -ne "  New Output File: "; read -e input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
-                    5) echo -ne "  Recursive (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then recursief="$input"; fi ;;
-                    6) echo -ne "  Show Paths (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then paths="$input"; fi ;;
-                    7) echo -ne "  Verbose (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then verbose="$input"; fi ;;
+                    1) read_with_default "  New Source Dir: " "$bronmap" bronmap ;;
+                    2) read_with_default "  New Target Dir: " "$doelmap" doelmap ;;
+                    3) read_with_default "  New Extension (no dot): " "$extensie" extensie ;;
+                    4) read_with_default "  New Output File: " "$output_file" output_file ;;
+                    5) read_with_default "  Recursive (y/n): " "$recursief" recursief ;;
+                    6) read_with_default "  Show Paths (y/n): " "$paths" paths ;;
+                    7) read_with_default "  Verbose (y/n): " "$verbose" verbose ;;
                     [sS])
                         args=("-s" "$bronmap" "-t" "$doelmap" "-e" "$extensie" "-o" "$output_file")
                         if [[ "$recursief" =~ ^[nN] ]]; then args+=("-n"); fi
@@ -110,11 +128,11 @@ while true; do
             bronmap="."
             output_file="output.csv"
             muziek="n"
-            toon_naam="j"
-            toon_type="j"
-            toon_grootte="j"
+            toon_naam="y"
+            toon_type="y"
+            toon_grootte="y"
             toon_pad="n"
-            filter_hidden="j"
+            filter_hidden="y"
 
             while true; do
                 clear
@@ -139,14 +157,14 @@ while true; do
                 read -e -p "Choice: " config_choice
 
                 case "$config_choice" in
-                    1) echo -ne "  New Source Dir: "; read -e input < /dev/tty; if [ -n "$input" ]; then bronmap="$input"; fi ;;
-                    2) echo -ne "  New Output File: "; read -e input < /dev/tty; if [ -n "$input" ]; then output_file="$input"; fi ;;
-                    3) echo -ne "  Filter hidden files (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then filter_hidden="$input"; fi ;;
-                    4) echo -ne "  Music DB Mode (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then muziek="$input"; fi ;;
-                    5) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Filename (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_naam="$input"; fi; fi ;;
-                    6) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Filetype (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_type="$input"; fi; fi ;;
-                    7) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show File Size (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_grootte="$input"; fi; fi ;;
-                    8) if [[ "$muziek" =~ ^[nN] ]]; then echo -ne "  Show Full Path (y/n): "; read -e input < /dev/tty; if [[ "$input" =~ ^[yYnN]$ ]]; then toon_pad="$input"; fi; fi ;;
+                    1) read_with_default "  New Source Dir: " "$bronmap" bronmap ;;
+                    2) read_with_default "  New Output File: " "$output_file" output_file ;;
+                    3) read_with_default "  Filter hidden files (y/n): " "$filter_hidden" filter_hidden ;;
+                    4) read_with_default "  Music DB Mode (y/n): " "$muziek" muziek ;;
+                    5) if [[ "$muziek" =~ ^[nN] ]]; then read_with_default "  Show Filename (y/n): " "$toon_naam" toon_naam; fi ;;
+                    6) if [[ "$muziek" =~ ^[nN] ]]; then read_with_default "  Show Filetype (y/n): " "$toon_type" toon_type; fi ;;
+                    7) if [[ "$muziek" =~ ^[nN] ]]; then read_with_default "  Show File Size (y/n): " "$toon_grootte" toon_grootte; fi ;;
+                    8) if [[ "$muziek" =~ ^[nN] ]]; then read_with_default "  Show Full Path (y/n): " "$toon_pad" toon_pad; fi ;;
                     [sS])
                         args=("-d" "$bronmap" "-o" "$output_file")
 

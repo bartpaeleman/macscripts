@@ -107,7 +107,7 @@ TMP_FILE=$(mktemp -t lijst_csv.XXXXXX)
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
 # Zoek bestanden
-ABSOLUTE_BRONMAP=$(realpath "$BRONMAP" 2>/dev/null || cd "$BRONMAP" && pwd)
+ABSOLUTE_BRONMAP=$(realpath "$BRONMAP" 2>/dev/null || { cd "$BRONMAP" >/dev/null 2>&1 && pwd; })
 echo -e "\n🔍 Zoeken naar bestanden in $ABSOLUTE_BRONMAP..." >&2
 if $FILTER_HIDDEN; then
     find "$BRONMAP" -type f ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
