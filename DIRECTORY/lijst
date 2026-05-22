@@ -137,14 +137,21 @@ if [[ ! -d "$DOELMAP" ]]; then
 fi
 
 if [[ -z "$EXTENSIE" ]]; then
-    echo "❌ Extensie mag niet leeg zijn"
-    exit 1
+    EXTENSIE="*"
+fi
+
+if [[ "$EXTENSIE" == "*" || "$EXTENSIE" == "all" ]]; then
+    EXT_DISPLAY="Alle (*)"
+    EXT_SEARCH=""
+else
+    EXT_DISPLAY=".$EXTENSIE"
+    EXT_SEARCH="-iname \"*.${EXTENSIE}\""
 fi
 
 echo "=== Bestanden Lijst Generator ==="
 echo "📁 Bronmap: $BRONMAP"
 echo "💾 Doelmap: $DOELMAP"
-echo "📄 Extensie: .$EXTENSIE"
+echo "📄 Extensie: $EXT_DISPLAY"
 echo "📝 Uitvoerbestand: $UITVOER_BESTAND"
 echo "🔍 Modus: $($RECURSIVE && echo "Recursief" || echo "Alleen huidige directory")"
 echo "🚫 Hidden files: worden gefilterd"
@@ -155,26 +162,34 @@ echo
 TMP_FILE=$(mktemp -t bestanden_lijst.XXXXXX)
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
-echo "🔍 Zoeken naar .$EXTENSIE bestanden in $BRONMAP..."
+echo "🔍 Zoeken naar bestanden ($EXT_DISPLAY) in $BRONMAP..."
 
 # Find commando met filtering van hidden files en sortering
 if $RECURSIVE; then
     echo "🌳 Zoeken recursief..."
-    find "$BRONMAP" -type f -iname "*.${EXTENSIE}" ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
+    if [[ -z "$EXT_SEARCH" ]]; then
+        find "$BRONMAP" -type f ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
+    else
+        find "$BRONMAP" -type f -iname "*.${EXTENSIE}" ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
+    fi
 else
     echo "📂 Zoeken niet-recursief..."
-    find "$BRONMAP" -maxdepth 1 -type f -iname "*.${EXTENSIE}" ! -name ".*" | sort > "$TMP_FILE"
+    if [[ -z "$EXT_SEARCH" ]]; then
+        find "$BRONMAP" -maxdepth 1 -type f ! -name ".*" | sort > "$TMP_FILE"
+    else
+        find "$BRONMAP" -maxdepth 1 -type f -iname "*.${EXTENSIE}" ! -name ".*" | sort > "$TMP_FILE"
+    fi
 fi
 
 # Tel aantal gevonden bestanden
 AANTAL_BESTANDEN=$(wc -l < "$TMP_FILE" 2>/dev/null | tr -d ' ' || echo "0")
 
 if [[ $AANTAL_BESTANDEN -eq 0 ]] || [[ -z "$AANTAL_BESTANDEN" ]]; then
-    echo "❌ Geen .$EXTENSIE bestanden gevonden in $BRONMAP (zonder hidden files)"
+    echo "❌ Geen bestanden ($EXT_DISPLAY) gevonden in $BRONMAP (zonder hidden files)"
     exit 1
 fi
 
-echo "✅ Aantal gevonden .$EXTENSIE bestanden: $AANTAL_BESTANDEN"
+echo "✅ Aantal gevonden bestanden ($EXT_DISPLAY): $AANTAL_BESTANDEN"
 
 if $VERBOSE; then
     echo ""
@@ -201,12 +216,16 @@ echo "🔄 Verwerken van bestanden..."
     echo "# Bestanden lijst gegenereerd op: $(date)"
     echo "# Bronmap: $BRONMAP"
     echo "# Doelmap: $DOELMAP"
-    echo "# Extensie: .$EXTENSIE"
+    echo "# Extensie: $EXT_DISPLAY"
     echo "# Aantal bestanden: $AANTAL_BESTANDEN"
     echo "# Sortering: alfabetisch"
     echo "# Hidden files: gefilterd"
     echo "#"
-    echo "# Bestandsnamen (zonder extensie):"
+    if [[ "$EXTENSIE" == "*" || "$EXTENSIE" == "all" ]]; then
+        echo "# Bestandsnamen:"
+    else
+        echo "# Bestandsnamen (zonder extensie):"
+    fi
     echo ""
 
     # Verwerk elk bestand - gesorteerd
@@ -216,19 +235,27 @@ echo "🔄 Verwerken van bestanden..."
         # Verwijder de BRONMAP van het pad voor nettere weergave
         relatieve_pad="${bestand#$BRONMAP/}"
         
-        if $INCLUDE_PATHS; then
-            # Behoud pad maar verwijder extensie
-            bestand_zonder_extensie="${relatieve_pad%.$EXTENSIE}"
-            # Voor hoofdletter extensies
-            upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
-            bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+        if [[ "$EXTENSIE" == "*" || "$EXTENSIE" == "all" ]]; then
+            if $INCLUDE_PATHS; then
+                bestand_zonder_extensie="$relatieve_pad"
+            else
+                bestand_zonder_extensie="$(basename "$relatieve_pad")"
+            fi
         else
-            # Alleen bestandsnaam zonder pad
-            bestand_naam=$(basename "$relatieve_pad")
-            bestand_zonder_extensie="${bestand_naam%.$EXTENSIE}"
-            # Voor hoofdletter extensies
-            upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
-            bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+            if $INCLUDE_PATHS; then
+                # Behoud pad maar verwijder extensie
+                bestand_zonder_extensie="${relatieve_pad%.$EXTENSIE}"
+                # Voor hoofdletter extensies
+                upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
+                bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+            else
+                # Alleen bestandsnaam zonder pad
+                bestand_naam=$(basename "$relatieve_pad")
+                bestand_zonder_extensie="${bestand_naam%.$EXTENSIE}"
+                # Voor hoofdletter extensies
+                upper_ext=$(echo "$EXTENSIE" | tr '[:lower:]' '[:upper:]')
+                bestand_zonder_extensie="${bestand_zonder_extensie%.$upper_ext}"
+            fi
         fi
         
         # Toon informatie als verbose modus aan staat
