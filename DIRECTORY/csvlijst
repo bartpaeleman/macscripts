@@ -107,11 +107,21 @@ TMP_FILE=$(mktemp -t lijst_csv.XXXXXX)
 trap 'rm -f "$TMP_FILE"' EXIT INT TERM
 
 # Zoek bestanden
+echo -e "\n🔍 Zoeken naar bestanden in $BRONMAP..." >&2
 if $FILTER_HIDDEN; then
     find "$BRONMAP" -type f ! -name ".*" ! -path "*/.*" | sort > "$TMP_FILE"
 else
     find "$BRONMAP" -type f | sort > "$TMP_FILE"
 fi
+
+# Tel aantal gevonden bestanden
+AANTAL_BESTANDEN=$(wc -l < "$TMP_FILE" 2>/dev/null | tr -d ' ' || echo "0")
+if [[ $AANTAL_BESTANDEN -eq 0 ]] || [[ -z "$AANTAL_BESTANDEN" ]]; then
+    echo "❌ Geen bestanden gevonden in $BRONMAP" >&2
+    exit 1
+fi
+echo "✅ $AANTAL_BESTANDEN bestanden gevonden. Starten met verwerken..." >&2
+echo "" >&2
 
 # Functie om array naar csv regel te converteren
 to_csv() {
@@ -150,8 +160,13 @@ to_csv() {
         done
         to_csv "${HEADER[@]}"
 
+        teller=0
         while IFS= read -r bestand; do
             [[ -z "$bestand" ]] && continue
+
+            teller=$((teller + 1))
+            # Print progress indicator op stderr
+            printf "\r🔄 Verwerken bestand %d van %d..." "$teller" "$AANTAL_BESTANDEN" >&2
 
             ROW=()
             bestandsnaam=$(basename "$bestand")
@@ -191,6 +206,7 @@ to_csv() {
 
             to_csv "${ROW[@]}"
         done < "$TMP_FILE"
+        printf "\n" >&2
     else
         # Bouw de header
         HEADER=()
@@ -201,8 +217,13 @@ to_csv() {
 
         to_csv "${HEADER[@]}"
 
+        teller=0
         while IFS= read -r bestand; do
             [[ -z "$bestand" ]] && continue
+
+            teller=$((teller + 1))
+            # Print progress indicator op stderr
+            printf "\r🔄 Verwerken bestand %d van %d..." "$teller" "$AANTAL_BESTANDEN" >&2
 
             ROW=()
 
@@ -229,7 +250,8 @@ to_csv() {
 
             to_csv "${ROW[@]}"
         done < "$TMP_FILE"
+        printf "\n" >&2
     fi
 } > "$UITVOER_BESTAND"
 
-echo "✅ CSV bestand aangemaakt: $UITVOER_BESTAND"
+echo -e "\n✅ CSV bestand aangemaakt: $UITVOER_BESTAND" >&2
