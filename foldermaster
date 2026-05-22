@@ -57,25 +57,25 @@ while true; do
         1)
             echo -e "\n${CYAN}=== Bestanden Lijst Configuratie ===${NC}"
 
-            read -e -p "📁 Wat is de bronmap? [huidige map]: " bronmap < /dev/tty
+            read -e -p "Wat is de bronmap? [huidige map]: " bronmap
             bronmap=${bronmap:-.}
 
-            read -e -p "💾 Wat is de doelmap voor het uitvoerbestand? [huidige map]: " doelmap < /dev/tty
+            read -e -p "Wat is de doelmap voor het uitvoerbestand? [huidige map]: " doelmap
             doelmap=${doelmap:-.}
 
-            read -p "📄 Welke extensie wil je zoeken? (zonder punt) [mp4]: " extensie < /dev/tty
+            read -e -p "Welke extensie wil je zoeken? (zonder punt) [mp4]: " extensie
             extensie=${extensie:-mp4}
 
-            read -e -p "📝 Wat is de naam van het uitvoerbestand? [bestanden_lijst.txt]: " output_file < /dev/tty
+            read -e -p "Wat is de naam van het uitvoerbestand? [bestanden_lijst.txt]: " output_file
             output_file=${output_file:-bestanden_lijst.txt}
 
-            read -p "🔍 Wil je recursief zoeken in submappen? (j/n) [j]: " recursief
+            read -e -p "Wil je recursief zoeken in submappen? (j/n) [j]: " recursief
             recursief=${recursief:-j}
 
-            read -p "📂 Wil je padinformatie includeren in de lijst? (j/n) [n]: " paths
+            read -e -p "Wil je padinformatie includeren in de lijst? (j/n) [n]: " paths
             paths=${paths:-n}
 
-            read -p "🗣️ Wil je gedetailleerde (verbose) output zien? (j/n) [n]: " verbose
+            read -e -p "Wil je gedetailleerde (verbose) output zien? (j/n) [n]: " verbose
             verbose=${verbose:-n}
 
             args=("-s" "$bronmap" "-t" "$doelmap" "-e" "$extensie" "-o" "$output_file")
@@ -96,13 +96,13 @@ while true; do
         2)
             echo -e "\n${CYAN}=== CSV Lijst Configuratie ===${NC}"
 
-            read -e -p "📁 Wat is de bronmap? [huidige map]: " bronmap < /dev/tty
+            read -e -p "Wat is de bronmap? [huidige map]: " bronmap
             bronmap=${bronmap:-.}
 
-            read -e -p "📝 Wat is de naam van het uitvoerbestand? [output.csv]: " output_file < /dev/tty
+            read -e -p "Wat is de naam van het uitvoerbestand? [output.csv]: " output_file
             output_file=${output_file:-output.csv}
 
-            read -p "🎵 Wil je de Muziek Database modus gebruiken (ARTIEST, TITEL, MAP, etc.)? (j/n) [n]: " muziek
+            read -e -p "Wil je de Muziek Database modus gebruiken (ARTIEST, TITEL, MAP, etc.)? (j/n) [n]: " muziek
             muziek=${muziek:-n}
 
             args=("-d" "$bronmap" "-o" "$output_file")
@@ -111,25 +111,25 @@ while true; do
                 args+=("-m")
             else
                 echo -e "\nWelke kolommen wil je opnemen in de CSV?"
-                read -p "  Toon BESTANDSNAAM? (j/n) [j]: " toon_naam
+                read -e -p "  Toon BESTANDSNAAM? (j/n) [j]: " toon_naam
                 toon_naam=${toon_naam:-j}
                 if [[ "$toon_naam" =~ ^[jJyY] ]]; then args+=("-n"); fi
 
-                read -p "  Toon BESTANDSTYPE? (j/n) [j]: " toon_type
+                read -e -p "  Toon BESTANDSTYPE? (j/n) [j]: " toon_type
                 toon_type=${toon_type:-j}
                 if [[ "$toon_type" =~ ^[jJyY] ]]; then args+=("-t"); fi
 
-                read -p "  Toon BESTANDSGROOTTE? (j/n) [j]: " toon_grootte
+                read -e -p "  Toon BESTANDSGROOTTE? (j/n) [j]: " toon_grootte
                 toon_grootte=${toon_grootte:-j}
                 if [[ "$toon_grootte" =~ ^[jJyY] ]]; then args+=("-s"); fi
 
-                read -p "  Toon VOLLEDIG PAD? (j/n) [n]: " toon_pad
+                read -e -p "  Toon VOLLEDIG PAD? (j/n) [n]: " toon_pad
                 toon_pad=${toon_pad:-n}
                 if [[ "$toon_pad" =~ ^[jJyY] ]]; then args+=("-p"); fi
             fi
 
             echo ""
-            read -p "🚫 Wil je onzichtbare (hidden) bestanden eruit filteren? (j/n) [j]: " filter_hidden
+            read -e -p "Wil je onzichtbare (hidden) bestanden eruit filteren? (j/n) [j]: " filter_hidden
             filter_hidden=${filter_hidden:-j}
             if [[ "$filter_hidden" =~ ^[jJyY] ]]; then
                 args+=("-f")
@@ -141,13 +141,13 @@ while true; do
             ;;
         3)
             echo -e "${GREEN}Running copy_sync...${NC}"
-            read -e -p "Enter arguments (or press enter for interactive): " args < /dev/tty
+            read -e -p "Enter arguments (or press enter for interactive): " args
             eval "\"$DIR_DIR/copy_sync\" $args"
             pause
             ;;
         4)
             echo -e "${GREEN}Running compare_folders...${NC}"
-            read -e -p "Enter arguments (or press enter for interactive): " args < /dev/tty
+            read -e -p "Enter arguments (or press enter for interactive): " args
             eval "\"$DIR_DIR/compare_folders\" $args"
             pause
             ;;
