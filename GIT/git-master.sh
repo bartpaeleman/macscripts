@@ -65,13 +65,35 @@ load_env() {
     done < "$ENV_FILE"
 
     # Validate required variables
-    if [[ -z "${GITHUB_TOKEN:-}" ]] || [[ -z "${GITHUB_USERNAME:-}" ]]; then
-        printf "\033[1;31mERROR: GITHUB_TOKEN and GITHUB_USERNAME must be set in .env\033[0m\n"
-        exit 1
+    if [[ -z "${GITHUB_TOKEN:-}" ]] || [[ -z "${GITHUB_USERNAME:-}" ]] || [[ -z "${GITHUB_EMAIL:-}" ]]; then
+        printf "\033[1;31mERROR: GITHUB_TOKEN, GITHUB_USERNAME, and GITHUB_EMAIL must be set in .env\033[0m\n"
+        read -p "Would you like to edit the .env file now? (y/n): " edit_env
+        if [[ "$edit_env" =~ ^[Yy]$ ]]; then
+            ${EDITOR:-nano} "$ENV_FILE"
+            printf "${GREEN}Please re-run gitmaster to apply the changes.${NC}\n"
+            exit 0
+        else
+            exit 1
+        fi
     fi
 
-    # Determine execution context (No longer tracking PROD/DEV/TEST separately)
-    PATH_ROOT="${PWD}"
+    # Set git config globally if not yet set
+    if [[ -z "$(git config --global user.name)" && -n "${GITHUB_USERNAME}" ]]; then
+        git config --global user.name "${GITHUB_USERNAME}"
+    fi
+    if [[ -z "$(git config --global user.email)" && -n "${GITHUB_EMAIL}" ]]; then
+        git config --global user.email "${GITHUB_EMAIL}"
+    fi
+
+    # Set default paths if not configured
+    PATH_ROOT="${PATH_ROOT:-/share/Web}"
+    PATH_PROD="${PATH_PROD:-${PATH_ROOT}}"
+    PATH_DEV="${PATH_DEV:-${PATH_ROOT}/DEV}"
+    PATH_TEST="${PATH_TEST:-${PATH_ROOT}/TEST}"
+
+    # QNAP persistence paths
+    PERSISTENT_SCRIPT_PATH="${PERSISTENT_SCRIPT_PATH:-${PATH_DEV}/scripts/git-master.sh}"
+    PERSISTENT_ENV="${PERSISTENT_ENV:-${PATH_DEV}/scripts/.env}"
 }
 
 # --- COLOR DEFINITIONS ---
@@ -115,11 +137,32 @@ print_colored_branch_list() {
             printf " ${GREEN}%2d) %s${NC}\n" "$i" "$branch"
         fi
     done
-    printf " ${RED}0) Cancel${NC}\n"
+    printf " ${RED}X) Cancel${NC}\n"
 }
 
 check_dirty() {
     if [[ -n $(git status -s) ]]; then
+        # Check for files that are tracked but match .gitignore (causing checkout errors)
+        local ignored_tracked=$(git ls-files -i -c --exclude-standard 2>/dev/null || true)
+        if [[ -n "$ignored_tracked" ]]; then
+            printf "${YELLOW}Detected tracked files that match .gitignore:${NC}\n"
+            echo "$ignored_tracked" | sed 's/^/  /'
+            printf "These will block branch checkouts if they exist on the target branch.\n"
+            read -p "Untrack them from git cache now (git rm --cached) and commit? (y/n): " rm_conf
+            if [[ "$rm_conf" == "y" ]]; then
+                # Untrack files while leaving them locally
+                echo "$ignored_tracked" | tr '\n' '\0' | xargs -0 git rm --cached -q
+                # Commit the deletion from git
+                git commit -m "chore: untrack ignored files" -q
+                printf "${GREEN}Files untracked and committed. They will remain locally.${NC}\n"
+
+                # If no more changes, return success
+                if [[ -z $(git status -s) ]]; then
+                    return 0
+                fi
+            fi
+        fi
+
         printf "${YELLOW}Uncommitted changes detected!${NC}\n"
         git status -s
         read -p "Continue anyway? (y/n): " cont
@@ -146,8 +189,21 @@ show_git_stats() {
 }
 
 detect_environment() {
-    echo "${NC}[ LOCATION: ${PWD} ]"
-    return 0
+    local current_path="$1"
+
+    if [[ "$current_path" == "$PATH_DEV"* ]]; then
+        echo "${GREEN}[ ENV: DEV (QNAP) ]${NC}"
+        return 0
+    elif [[ "$current_path" == "$PATH_TEST"* ]]; then
+        echo "${YELLOW}[ ENV: TEST (UAT) ]${NC}"
+        return 0
+    elif [[ "$current_path" == "$PATH_PROD"* ]]; then
+        echo "${RED}${BOLD}[ ENV: PROD (LIVE) ]${NC}"
+        return 1
+    else
+        echo "${NC}[ LOCATION: EXTERNAL ]"
+        return 0
+    fi
 }
 
 # Ensure authentication token is configured in git remote
@@ -260,9 +316,11 @@ while true; do
         printf " 1. INFO          (Status, History & Analysis)\n"
         printf " 2. DEVELOPMENT   (Repo & Branch commands)\n"
         printf " 3. FIX           (Errors)\n"
-        printf " 4. MAINTENANCE   (Backup & Restore)\n"
+        printf " 4. FILES          (Create, Edit, Delete Repo Files)\n"
+        printf " 5. MAINTENANCE   (Backup & Restore)\n"
         printf -- "\n---------------------------------------------------------------\n"
-        printf " X) Exit\n"
+        printf " S) SETUP PERSISTENCE- Fix QNAP login & Aliases\n"
+        printf " Q) QUIT\n"
         printf -- "${BOLD}===============================================================${NC}\n"
 
         read -p "Select action: " main_choice
@@ -276,7 +334,7 @@ while true; do
                 printf " 4) SEARCH CODE     - Find text in all files (grep)\n"
                 printf " 5) COMMIT FINDER   - Search commits by message\n"
                 printf " 6) BRANCH COMPARE  - See differences between branches\n"
-                read -p "Select command (0 to return): " sub_choice
+                read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="1" ;;
                     2) choice="18" ;;
@@ -284,7 +342,7 @@ while true; do
                     4) choice="20" ;;
                     5) choice="21" ;;
                     6) choice="22" ;;
-                    [0]) continue ;;
+                    [Xx]) continue ;;
                     *) continue ;;
                 esac
                 ;;
@@ -293,64 +351,86 @@ while true; do
                 printf " 1) CHECKOUT REPO    - Fetch & Switch to Repository (Branch)\n"
                 printf " 2) BRANCH EXPLORER  - Switch or Create new Feature Branch\n"
                 printf " 3) QUICK COMMIT     - Stage, Commit & Push active work\n"
-                printf " 4) SYNC FETCH       - Pull remote changes into active branch\n"
-                printf " 5) PREPARE UAT      - Merge branch into TEST (Overwrite conflicts)\n"
-                printf " 6) STAGING PUSH     - Force sync current to DEV-STABLE\n"
-                printf " 7) MERGE FIXES     - Process external fixes (Jules)\n"
-                printf " 8) RELEASE TAG     - Mark current state (v1.x)\n"
-                printf " 9) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
-                printf " 10) DELETE LOCAL    - Manually delete a local branch\n"
-                read -p "Select command (0 to return): " sub_choice
+        printf " 4) COMMIT LOCAL     - Stage & Commit local changes (No push)\n"
+        printf " 5) AMEND COMMIT     - Add local changes to last commit / edit message\n"
+        printf " 6) SYNC FETCH       - Pull remote changes into active branch\n"
+        printf " 7) PREPARE UAT      - Merge branch into TEST (Overwrite conflicts)\n"
+        printf " 8) STAGING PUSH     - Force sync current to DEV-STABLE\n"
+        printf " 9) MERGE FIXES      - Process external fixes (Jules)\n"
+        printf " 10) RELEASE TAG     - Mark current state (v1.x)\n"
+        printf " 11) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
+        printf " 12) DELETE BRANCH   - Manually delete a branch\n"
+                read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="2" ;;
                     2) choice="3" ;;
                     3) choice="4" ;;
-                    4) choice="5" ;;
-                    5) choice="8" ;;
-                    6) choice="9" ;;
-                    7) choice="10" ;;
-                    8) choice="11" ;;
-                    9) choice="12" ;;
-                    10) choice="13" ;;
-                    [0]) continue ;;
+            4) choice="31" ;;
+            5) choice="32" ;;
+            6) choice="5" ;;
+            7) choice="8" ;;
+            8) choice="9" ;;
+            9) choice="10" ;;
+            10) choice="11" ;;
+            11) choice="12" ;;
+            12) choice="13" ;;
+                    [Xx]) continue ;;
                     *) continue ;;
                 esac
                 ;;
             3)
                 printf "\n${YELLOW}${BOLD}[FIX]${NC}\n"
-                printf " 1) SYNC FORCE       - Overwrite Local or GitHub (Conflict fix)\n"
-                printf " 2) UNDO COMMIT     - Revert last commit (keep files)\n"
-                printf " 3) FORCE RESET     - Wipe local and reset to main (CAUTION)\n"
-                printf " 4) EMERGENCY       - Abort failed merges / Clear locks\n"
-                printf " 5) RESTORE COMMIT  - Checkout, Revert or Reset to a previous commit\n"
-                printf " 6) STASH PULL POP  - Stash local changes, pull and pop\n"
-                printf " 7) FORGET FILE     - Remove file from git cache\n"
-                read -p "Select command (0 to return): " sub_choice
+                printf " 1) FIX PULL ISSUES  - Resolve unstaged changes blocking pull\n"
+                printf " 2) SYNC FORCE       - Overwrite Local or GitHub (Conflict fix)\n"
+        printf " 3) UNDO COMMIT      - Revert last commit (keep files)\n"
+        printf " 4) FORCE RESET      - Wipe local and reset to main (CAUTION)\n"
+        printf " 5) EMERGENCY        - Abort failed merges / Clear locks\n"
+        printf " 6) RESTORE COMMIT   - Checkout, Revert or Reset to a previous commit\n"
+        printf " 7) STASH MANAGER    - View, apply, pop, or delete stashes\n"
+        printf " 8) FORGET FILE      - Remove file from git cache\n"
+                read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    1) choice="6" ;;
-                    2) choice="14" ;;
-                    3) choice="15" ;;
-                    4) choice="16" ;;
-                    5) choice="17" ;;
-                    6) choice="23" ;;
-                    7) choice="24" ;;
-                    [0]) continue ;;
+                    1) choice="30" ;;
+                    2) choice="6" ;;
+                    3) choice="14" ;;
+                    4) choice="15" ;;
+                    5) choice="16" ;;
+                    6) choice="17" ;;
+                    7) choice="23" ;;
+                    8) choice="24" ;;
+                    [Xx]) continue ;;
                     *) continue ;;
                 esac
                 ;;
             4)
-                printf "\n${YELLOW}${BOLD}[MAINTENANCE]${NC}\n"
-                printf " 1) BACKUP POINT     - Create local snapshot branch\n"
-        printf " 2) RESTORE BACKUP   - Restore from a local snapshot branch\n"
-                read -p "Select command (0 to return): " sub_choice
+                printf "\n${YELLOW}${BOLD}[FILES]${NC}\n"
+                printf " 1) EXCLUDE SYNC      - Prevent file/pattern from syncing\n"
+                printf " 2) EDIT/CREATE FILE - Open file in editor\n"
+                printf " 3) DELETE FILE      - Remove a file\n"
+                printf " 4) VIEW FILE        - Read file contents\n"
+                read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
-                    1) choice="7" ;;
-            2) choice="25" ;;
-                    [0]) continue ;;
+                    1) choice="29" ;;
+                    2) choice="26" ;;
+                    3) choice="27" ;;
+                    4) choice="28" ;;
+                    [Xx]) continue ;;
                     *) continue ;;
                 esac
                 ;;
-            [Ss]|[xX])
+            5)
+                printf "\n${YELLOW}${BOLD}[MAINTENANCE]${NC}\n"
+                printf " 1) BACKUP POINT     - Create local snapshot branch\n"
+        printf " 2) RESTORE BACKUP   - Restore from a local snapshot branch\n"
+                read -p "Select command (X to return): " sub_choice
+                case "$sub_choice" in
+                    1) choice="7" ;;
+                    2) choice="25" ;;
+                    [Xx]) continue ;;
+                    *) continue ;;
+                esac
+                ;;
+            [Ss]|[Qq])
                 choice="$main_choice"
                 ;;
             *)
@@ -430,7 +510,14 @@ while true; do
             if [[ -n "$sel_br" ]]; then
                 printf "${YELLOW}Checking out $sel_br...${NC}\n"
                 git checkout "$sel_br" 2>/dev/null || git checkout -b "$sel_br" "origin/$sel_br"
-                git pull origin "$sel_br"
+
+                # Check if remote branch still exists before pulling
+                if git ls-remote --exit-code --heads origin "$sel_br" >/dev/null 2>&1; then
+                    git pull origin "$sel_br" || { printf "${RED}Error: Pull failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                else
+                    printf "${YELLOW}Notice: Remote branch 'origin/%s' is gone.${NC}\n" "$sel_br"
+                    git branch --unset-upstream "$sel_br" 2>/dev/null || true
+                fi
             else
                 printf "${RED}Invalid selection.${NC}\n"
             fi
@@ -439,6 +526,10 @@ while true; do
         3) # BRANCH EXPLORER
             [[ "$IN_GIT" = false ]] && continue
             check_dirty || continue
+
+            printf "${CYAN}Fetching updates from origin...${NC}\n"
+            git fetch origin --prune >/dev/null 2>&1 || true
+
             get_branch_list_raw "be"
             print_colored_branch_list "be"
             read -p "Select number or name for NEW branch: " be_val
@@ -449,7 +540,14 @@ while true; do
                 target_branch=$(eval echo "\$be_${be_val}")
                 target_branch="${target_branch#remotes/origin/}"
                 git checkout "$target_branch" 2>/dev/null || git checkout -b "$target_branch" "origin/$target_branch"
-                git pull origin "$target_branch" 2>/dev/null
+
+                # Check if remote branch still exists before pulling
+                if git ls-remote --exit-code --heads origin "$target_branch" >/dev/null 2>&1; then
+                    git pull origin "$target_branch" 2>/dev/null || { printf "${RED}Error: Pull failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                else
+                    printf "${YELLOW}Notice: Remote branch 'origin/%s' is gone.${NC}\n" "$target_branch"
+                    git branch --unset-upstream "$target_branch" 2>/dev/null || true
+                fi
             else
                 git checkout -b "$be_val" && printf "${GREEN}Branch $be_val created.${NC}\n"
             fi
@@ -464,7 +562,7 @@ while true; do
             if [[ -n "$msg" ]]; then
                 git add . && \
                 git commit -m "$msg" && \
-                git push origin "$CURRENT_BRANCH"
+                git push origin "$CURRENT_BRANCH" || { printf "${RED}Error: Push failed.${NC}\n"; read -p "Enter..." junk; continue; }
                 read -p "Work pushed. Enter..." junk
             fi ;;
 
@@ -476,10 +574,10 @@ while true; do
         6) # SYNC FORCE
             [[ "$IN_GIT" = false ]] && continue
             git fetch origin || printf "${RED}Fetch failed.${NC}\n"
-            printf "1) OVERWRITE LOCAL (Loss of local work)\n2) FORCE PUSH (Loss of GitHub work)\n0) Cancel\n"
+            printf "1) OVERWRITE LOCAL (Loss of local work)\n2) FORCE PUSH (Loss of GitHub work)\nX) Cancel\n"
             read -p "Action: " fa_choice
-            [[ "$fa_choice" =~ 1 ]] && git reset --hard "origin/$CURRENT_BRANCH"
-            [[ "$fa_choice" =~ 2 ]] && git push origin "$CURRENT_BRANCH" --force
+            if [[ "$fa_choice" == "1" ]]; then git reset --hard "origin/$CURRENT_BRANCH" || { printf "${RED}Error: Reset failed.${NC}\n"; read -p "Enter..." junk; continue; }; fi
+            if [[ "$fa_choice" == "2" ]]; then git branch -f "$CURRENT_BRANCH" || true; git push origin "$CURRENT_BRANCH" --force || { printf "${RED}Error: Force push failed.${NC}\n"; read -p "Enter..." junk; continue; }; fi
             read -p "Sync complete. Enter..." junk ;;
 
         7) # BACKUP POINT
@@ -501,7 +599,7 @@ while true; do
             jules_br=$(eval echo "\$uat_${uat_idx}")
             jules_br="${jules_br#remotes/origin/}"
 
-            git checkout main && git pull origin main
+            git checkout main && git pull origin main || { printf "${RED}Error: Pull main failed.${NC}\n"; read -p "Enter..." junk; continue; }
             git checkout -B uat
 
             printf "${YELLOW}Merging and forcing file checkout to bypass untracked errors...${NC}\n"
@@ -550,7 +648,7 @@ while true; do
             fix_br="${fix_br#remotes/origin/}"
 
             if [[ -n "$fix_br" ]]; then
-                git merge "origin/$fix_br" --no-edit && git push origin "$CURRENT_BRANCH" && git branch -D "$fix_br" 2>/dev/null
+                git merge "origin/$fix_br" --no-edit && git push origin "$CURRENT_BRANCH" || { printf "${RED}Error: Push failed.${NC}\n"; read -p "Enter..." junk; continue; } && git branch -D "$fix_br" 2>/dev/null
             fi
             read -p "Enter..." junk ;;
 
@@ -568,17 +666,17 @@ while true; do
             [[ "$IN_GIT" = false ]] && continue
             git fetch origin --prune || true
             # || true prevents script exit if grep finds nothing (set -e)
-            GONE=$(git branch -vv | grep ': gone]' | awk '{print $1}' || true)
+            GONE=$(git branch -vv | sed 's/^[* ]*//' | grep ': gone]' | awk '{print $1}' || true)
 
             if [[ -n "$GONE" ]]; then
-                echo "$GONE" | xargs git branch -D
+                echo "$GONE" | xargs git branch -D || true
                 printf "${GREEN}Pruned dead branches.${NC}\n"
             else
                 printf "Nothing to prune.\n"
             fi
             read -p "Enter..." junk ;;
 
-        13) # DELETE LOCAL
+        13) # DELETE BRANCH
             [[ "$IN_GIT" = false ]] && continue
             get_branch_list_raw "dk"
             print_colored_branch_list "dk"
@@ -601,8 +699,14 @@ while true; do
 
             del_br=$(eval echo "\$dk_${dk_idx}")
             if [[ "$del_br" != "$CURRENT_BRANCH" ]] && [[ -n "$del_br" ]]; then
-                git branch -D "$del_br"
-                printf "${RED}Branch $del_br deleted.${NC}\n"
+                if [[ "$del_br" == remotes/origin/* ]]; then
+                    remote_br="${del_br#remotes/origin/}"
+                    git push origin --delete "$remote_br" || true
+                    printf "${RED}Remote branch $remote_br deleted.${NC}\n"
+                else
+                    git branch -D "$del_br" || true
+                    printf "${RED}Branch $del_br deleted.${NC}\n"
+                fi
             fi
             read -p "Enter..." junk ;;
 
@@ -658,7 +762,7 @@ while true; do
             printf " 1) Checkout (Detached HEAD to test/look around)\n"
             printf " 2) Revert (Create new commit undoing changes)\n"
             printf " 3) Reset branch to here (Discard all changes after this commit)\n"
-            printf " 0) Cancel\n"
+            printf " X) Cancel\n"
 
             read -p "Select action: " restore_choice
 
@@ -822,26 +926,113 @@ while true; do
             fi
             read -p "Enter..." junk ;;
 
-        23) # STASH PULL POP
+        31) # COMMIT LOCAL
             [[ "$IN_GIT" = false ]] && continue
-            if [[ -n $(git status --porcelain) ]]; then
-                printf "${YELLOW}Stashing local changes...${NC}\n"
-                git stash
-                did_stash=true
+            git status -s
+            read -p "Commit Message (X to cancel): " msg
+            [[ "$msg" =~ ^[Xx]$ ]] && continue
+
+            if [[ -n "$msg" ]]; then
+                git add . && \
+                git commit -m "$msg" || { printf "${RED}Error: Commit failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                printf "${GREEN}Changes committed locally.${NC}\n"
+                read -p "Enter..." junk
+            fi ;;
+
+        32) # AMEND COMMIT
+            [[ "$IN_GIT" = false ]] && continue
+            printf "${CYAN}${BOLD}AMEND COMMIT${NC}\n\n"
+            printf "${YELLOW}Last commit details:${NC}\n"
+            git log -1 --stat | more
+            printf "\n"
+
+            git status -s
+            printf "\n"
+
+            read -p "Do you want to stage and add current local changes to the last commit? (y/n): " add_changes
+            if [[ "$add_changes" == "y" ]]; then
+                git add .
+                printf "${GREEN}Local changes staged.${NC}\n"
+            fi
+
+            read -p "Do you want to change the commit message? (y/n): " change_msg
+            if [[ "$change_msg" == "y" ]]; then
+                read -p "New commit message: " new_msg
+                if [[ -n "$new_msg" ]]; then
+                    git commit --amend -m "$new_msg" || { printf "${RED}Error: Amend failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                    printf "${GREEN}Commit amended with new message.${NC}\n"
+                else
+                    printf "${RED}Message empty. Amend aborted.${NC}\n"
+                fi
             else
-                did_stash=false
+                git commit --amend --no-edit || { printf "${RED}Error: Amend failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                printf "${GREEN}Commit amended (message kept).${NC}\n"
             fi
-            printf "${CYAN}Pulling from origin ${CURRENT_BRANCH}...${NC}\n"
-            git pull origin "$CURRENT_BRANCH"
-            if [[ "$did_stash" == true ]]; then
-                printf "${YELLOW}Popping stash...${NC}\n"
-                git stash pop
+            read -p "Enter..." junk ;;
+
+        23) # STASH MANAGER
+            [[ "$IN_GIT" = false ]] && continue
+            clear
+            printf "${CYAN}${BOLD}STASH MANAGER${NC}\n\n"
+
+            stash_count=$(git stash list | wc -l)
+            if [[ "$stash_count" -eq 0 ]]; then
+                printf "${YELLOW}No stashes found.${NC}\n"
+                read -p "Enter..." junk
+                continue
             fi
+
+            printf "${YELLOW}Current Stashes:${NC}\n"
+            git stash list
+            printf "\n"
+
+            printf " 1) View Stash Changes (show)\n"
+            printf " 2) Apply Stash (keep in stash list)\n"
+            printf " 3) Pop Stash (apply and remove from list)\n"
+            printf " 4) Drop Stash (delete specific stash)\n"
+            printf " 5) Clear All Stashes (delete ALL)\n"
+            printf " X) Cancel\n\n"
+
+            read -p "Select action: " stash_action
+            case "$stash_action" in
+                1)
+                    read -p "Enter stash index (e.g., 0 for stash@{0}): " s_idx
+                    if [[ "$s_idx" =~ ^[0-9]+$ ]]; then
+                        git stash show -p "stash@{$s_idx}" | more
+                    fi
+                    ;;
+                2)
+                    read -p "Enter stash index (e.g., 0 for stash@{0}): " s_idx
+                    if [[ "$s_idx" =~ ^[0-9]+$ ]]; then
+                        git stash apply "stash@{$s_idx}"
+                    fi
+                    ;;
+                3)
+                    read -p "Enter stash index (e.g., 0 for stash@{0}): " s_idx
+                    if [[ "$s_idx" =~ ^[0-9]+$ ]]; then
+                        git stash pop "stash@{$s_idx}"
+                    fi
+                    ;;
+                4)
+                    read -p "Enter stash index to drop (e.g., 0 for stash@{0}): " s_idx
+                    if [[ "$s_idx" =~ ^[0-9]+$ ]]; then
+                        git stash drop "stash@{$s_idx}"
+                        printf "${GREEN}Stash stash@{$s_idx} dropped.${NC}\n"
+                    fi
+                    ;;
+                5)
+                    read -p "Are you sure you want to delete ALL stashes? (y/n): " clear_conf
+                    if [[ "$clear_conf" == "y" ]]; then
+                        git stash clear
+                        printf "${GREEN}All stashes cleared.${NC}\n"
+                    fi
+                    ;;
+            esac
             read -p "Enter..." junk ;;
 
         24) # FORGET CACHED FILE
             [[ "$IN_GIT" = false ]] && continue
-            read -e -p "Enter file to forget (git rm --cached): " file_to_forget
+            read -p "Enter file to forget (git rm --cached): " file_to_forget
             if [[ -n "$file_to_forget" ]]; then
                 git rm --cached "$file_to_forget"
                 printf "${GREEN}File removed from cache.${NC}\n"
@@ -884,7 +1075,7 @@ while true; do
             printf "1) Checkout this backup as active branch\n"
             printf "2) Overwrite 'main' locally with this backup\n"
             printf "3) Overwrite 'main' locally AND force push to GitHub\n"
-            printf "0) Cancel\n"
+            printf "X) Cancel\n"
 
             read -p "Choose action: " restore_action
             case "$restore_action" in
@@ -909,7 +1100,215 @@ while true; do
             esac
             read -p "Enter..." junk ;;
 
-        [xX]) clear; exit 0 ;;
+        29) # EXCLUDE SYNC
+            [[ "$IN_GIT" = false ]] && continue
+            clear
+            printf "${CYAN}${BOLD}EXCLUDE SYNC${NC}\n\n"
+            printf "This will prevent a file, folder, or pattern from being overwritten\n"
+            printf "by git sync/checkout, and ensure it remains untracked in GitHub.\n\n"
+            read -p "Enter file, folder, or pattern to exclude (e.g. config.php, logs/, *.tmp): " exclude_pattern
+            if [[ -n "$exclude_pattern" ]]; then
+                # Check if it is already in .gitignore
+                if ! grep -qxF "$exclude_pattern" .gitignore 2>/dev/null; then
+                    echo -e "\n$exclude_pattern" >> .gitignore
+                    printf "${GREEN}Added '%s' to .gitignore${NC}\n" "$exclude_pattern"
+                else
+                    printf "${YELLOW}'%s' is already in .gitignore${NC}\n" "$exclude_pattern"
+                fi
+
+                # Remove from git cache (stops tracking but keeps local file)
+                # Suppress error if the file wasn't tracked anyway
+                git rm -r --cached "$exclude_pattern" 2>/dev/null || true
+                printf "${GREEN}Removed '%s' from git tracking (kept locally).${NC}\n" "$exclude_pattern"
+
+                # Stage .gitignore
+                git add .gitignore
+
+                # Ask to commit
+                read -p "Commit this exclusion now? (y/n): " do_commit
+                if [[ "$do_commit" == [Yy]* ]]; then
+                    git commit -m "chore: exclude $exclude_pattern from sync" -q
+                    printf "${GREEN}Committed exclusion of '%s'.${NC}\n" "$exclude_pattern"
+                else
+                    printf "${YELLOW}Changes staged. Don't forget to commit them later.${NC}\n"
+                fi
+            fi
+            read -p "Enter..." junk ;;
+
+        30) # FIX PULL ISSUES
+            [[ "$IN_GIT" = false ]] && continue
+            clear
+            printf "${CYAN}${BOLD}FIX PULL ISSUES${NC}\n\n"
+
+            # Check if there are unstaged changes
+            if [[ -z $(git status --porcelain) ]]; then
+                printf "${GREEN}No unstaged changes found. You can pull safely.${NC}\n"
+                printf "${CYAN}Attempting to pull from origin ${CURRENT_BRANCH}...${NC}\n"
+                git pull origin "$CURRENT_BRANCH" || { printf "${RED}Pull failed.${NC}\n"; }
+            else
+                printf "${YELLOW}You have unstaged changes blocking the pull.${NC}\n\n"
+                printf "How would you like to resolve this?\n"
+                printf " 1) Stash changes, pull, and restore them (Recommended)\n"
+                printf " 2) Commit changes, then pull\n"
+                printf " 3) Discard local changes and pull (WARNING: Loses work)\n"
+                printf " X) Cancel\n\n"
+
+                read -p "Select action: " pull_fix_choice
+                case "$pull_fix_choice" in
+                    1)
+                        printf "\n${YELLOW}Stashing local changes...${NC}\n"
+                        git stash
+                        printf "${CYAN}Pulling from origin ${CURRENT_BRANCH}...${NC}\n"
+                        git pull origin "$CURRENT_BRANCH" || { printf "${RED}Pull failed.${NC}\n"; read -p "Enter..." junk; continue; }
+                        printf "${YELLOW}Popping stash...${NC}\n"
+                        git stash pop || true
+                        printf "${GREEN}Process completed.${NC}\n"
+                        ;;
+                    2)
+                        printf "\n${YELLOW}Committing changes...${NC}\n"
+                        read -p "Enter commit message: " fix_commit_msg
+                        if [[ -z "$fix_commit_msg" ]]; then
+                            fix_commit_msg="chore: auto-commit before pull"
+                        fi
+                        git add -A
+                        git commit -m "$fix_commit_msg" -q
+                        printf "${CYAN}Pulling from origin ${CURRENT_BRANCH}...${NC}\n"
+                        git pull origin "$CURRENT_BRANCH" --no-rebase || { printf "${RED}Pull failed. You may need to resolve merge conflicts.${NC}\n"; read -p "Enter..." junk; continue; }
+                        printf "${GREEN}Process completed.${NC}\n"
+                        ;;
+                    3)
+                        printf "\n${RED}WARNING: This will permanently destroy all uncommitted changes.${NC}\n"
+                        read -p "Are you absolutely sure? (y/N): " confirm_discard
+                        if [[ "$confirm_discard" == [Yy]* ]]; then
+                            printf "${YELLOW}Discarding local changes...${NC}\n"
+                            git reset --hard HEAD
+                            git clean -fd
+                            printf "${CYAN}Pulling from origin ${CURRENT_BRANCH}...${NC}\n"
+                            git pull origin "$CURRENT_BRANCH" || { printf "${RED}Pull failed.${NC}\n"; }
+                            printf "${GREEN}Process completed.${NC}\n"
+                        else
+                            printf "${YELLOW}Cancelled.${NC}\n"
+                        fi
+                        ;;
+                    [Xx])
+                        printf "${YELLOW}Cancelled.${NC}\n"
+                        ;;
+                    *)
+                        printf "${RED}Invalid selection.${NC}\n"
+                        ;;
+                esac
+            fi
+            read -p "Enter..." junk ;;
+
+        26) # EDIT/CREATE FILE
+            clear
+            printf "${CYAN}${BOLD}EDIT/CREATE FILE${NC}\n\n"
+            read -p "Enter filename (with path): " filepath
+            if [[ -n "$filepath" ]]; then
+                ${EDITOR:-nano} "$filepath"
+            fi
+            ;;
+
+        27) # DELETE FILE
+            clear
+            printf "${CYAN}${BOLD}DELETE FILE${NC}\n\n"
+            read -p "Enter filename to delete: " filepath
+            if [[ -f "$filepath" ]]; then
+                rm -i "$filepath"
+            else
+                printf "${RED}File not found: $filepath${NC}\n"
+                read -p "Enter..." junk
+            fi
+            ;;
+
+        28) # VIEW FILE
+            clear
+            printf "${CYAN}${BOLD}VIEW FILE${NC}\n\n"
+            read -p "Enter filename to view: " filepath
+            if [[ -f "$filepath" ]]; then
+                cat "$filepath" | more
+            else
+                printf "${RED}File not found: $filepath${NC}\n"
+                read -p "Enter..." junk
+            fi
+            ;;
+
+        [Ss]) # SETUP
+            clear
+            printf "${YELLOW}Environment Setup${NC}\n"
+            printf "Current .env: ${ENV_FILE}\n\n"
+
+            printf "1) Edit current .env\n"
+            printf "2) Create new .env from template\n"
+            printf "3) Show current configuration\n"
+            printf "4) Install Aliases (Multi-Shell Support)\n"
+            printf "X) Cancel\n\n"
+            read -p "Choose option: " setup_choice
+
+            case "$setup_choice" in
+                1)
+                    ${EDITOR:-nano} "$ENV_FILE"
+                    printf "${GREEN}Reloading configuration...${NC}\n"
+                    load_env
+                    ;;
+                2)
+                    if [[ -f "$ENV_FILE" ]]; then
+                        printf "\n${YELLOW}=== CURRENT REQUIRED INFO ===${NC}\n"
+                        # Parse only REQUIRED fields for display
+                        grep -E "^(GITHUB_TOKEN|GITHUB_USERNAME|GITHUB_EMAIL|PATH_ROOT)=" "$ENV_FILE" | while IFS='=' read -r key value; do
+                            value="${value%\"}"
+                            value="${value#\"}"
+                            printf "  ${CYAN}%-15s${NC}: %s\n" "$key" "$value"
+                        done
+                        printf "${YELLOW}=============================${NC}\n\n"
+
+                        read -p "Existing configuration found. Use this configuration (and cancel overwrite)? (y/n): " use_existing
+                        if [[ "$use_existing" == "y" ]]; then
+                            printf "${GREEN}Keeping existing configuration.${NC}\n"
+                            read -p "Enter..." junk
+                            continue
+                        fi
+                    fi
+
+                    if [[ -f "$ENV_EXAMPLE" ]]; then
+                        read -p "This will overwrite current .env. Continue? (y/n): " confirm
+                        if [[ "$confirm" == "y" ]]; then
+                            cp "$ENV_EXAMPLE" "$ENV_FILE"
+                            printf "${GREEN}Created new .env from template${NC}\n"
+                            printf "${YELLOW}Please edit and configure it now${NC}\n"
+                            ${EDITOR:-nano} "$ENV_FILE"
+                            load_env
+                        fi
+                    else
+                        printf "${RED}.env.example not found at: ${ENV_EXAMPLE}${NC}\n"
+                    fi
+                    ;;
+                3)
+                    printf "\n${CYAN}Current Configuration:${NC}\n"
+                    printf "  GitHub User: ${GITHUB_USERNAME}\n"
+                    printf "  GitHub Email: ${GITHUB_EMAIL}\n"
+                    printf "  GitHub Token: $([ -n "$GITHUB_TOKEN" ] && echo "***configured***" || echo "NOT SET")\n"
+                    printf "  PATH_ROOT: ${PATH_ROOT}\n"
+                    printf "  PATH_PROD: ${PATH_PROD}\n"
+                    printf "  PATH_DEV: ${PATH_DEV}\n"
+                    printf "  PATH_TEST: ${PATH_TEST}\n"
+                    ;;
+                4)
+                     # Re-use the master dev-tools script if available, or simple local alias
+                     ROOT_DIR=$(dirname "$SCRIPT_DIR")
+                     if [[ -f "$ROOT_DIR/dev-tools.sh" ]]; then
+                         printf "${CYAN}Launching Master Dev Tools Setup...${NC}\n"
+                         "$ROOT_DIR/dev-tools.sh"
+                     else
+                         printf "${YELLOW}Master Dev Tools script not found. Please run it from root.${NC}\n"
+                     fi
+                     read -p "Enter..." junk
+                     ;;
+                [Xx]) ;;
+            esac
+            read -p "Enter..." junk ;;
+
+        [Qq]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
 
