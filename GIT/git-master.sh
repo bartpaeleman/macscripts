@@ -356,10 +356,11 @@ while true; do
         printf " 6) SYNC FETCH       - Pull remote changes into active branch\n"
         printf " 7) PREPARE UAT      - Merge branch into TEST (Overwrite conflicts)\n"
         printf " 8) STAGING PUSH     - Force sync current to DEV-STABLE\n"
-        printf " 9) MERGE FIXES      - Process external fixes (Jules)\n"
-        printf " 10) RELEASE TAG     - Mark current state (v1.x)\n"
-        printf " 11) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
-        printf " 12) DELETE BRANCH   - Manually delete a branch\n"
+        printf " 9) REBASE ON MAIN   - Rebase feature branch on main (Clean history)\n"
+        printf " 10) MILESTONE MERGE - Merge feature into main (Milestones/Conflicts)\n"
+        printf " 11) RELEASE TAG     - Mark current state (v1.x)\n"
+        printf " 12) CLEANUP PRUNE   - Delete branches gone on GitHub\n"
+        printf " 13) DELETE BRANCH   - Manually delete a branch\n"
                 read -p "Select command (X to return): " sub_choice
                 case "$sub_choice" in
                     1) choice="2" ;;
@@ -370,10 +371,11 @@ while true; do
             6) choice="5" ;;
             7) choice="8" ;;
             8) choice="9" ;;
-            9) choice="10" ;;
-            10) choice="11" ;;
-            11) choice="12" ;;
-            12) choice="13" ;;
+            9) choice="33" ;;
+            10) choice="34" ;;
+            11) choice="11" ;;
+            12) choice="12" ;;
+            13) choice="13" ;;
                     [Xx]) continue ;;
                     *) continue ;;
                 esac
@@ -623,32 +625,87 @@ while true; do
             fi
             read -p "Enter..." junk ;;
 
-        10) # MERGE FIXES
+        33) # REBASE ON MAIN
             [[ "$IN_GIT" = false ]] && continue
-            get_branch_list_raw "mf"
-            print_colored_branch_list "mf"
-            read -p "Select Fix Branch: " mf_idx
-            [[ "$mf_idx" =~ ^[Xx]$ ]] && continue
+            clear
+            printf "${CYAN}${BOLD}REBASE ON MAIN${NC}\n\n"
+            printf "${YELLOW}Info: Rebasen herschrijft de commit-geschiedenis om deze in een strakke, rechte lijn te plaatsen.${NC}\n"
+            printf "Dit is de voorkeursmethode voor individuele ontwikkelaars of wanneer je samenwerkt met een AI agent.\n"
+            printf "Het voorkomt onnodige 'merge commits' en houdt de historie schoon en begrijpelijk.\n\n"
+            printf "${RED}LET OP: Als je je branch al had gepusht, moet je na deze actie een force push (--force-with-lease) doen.${NC}\n\n"
+
+            read -p "Start rebase van branch '$CURRENT_BRANCH' op origin/main? (y/n): " rb_conf
+            if [[ "$rb_conf" == [Yy]* ]]; then
+                printf "\n${CYAN}Fetching origin...${NC}\n"
+                git fetch origin || true
+                printf "${CYAN}Rebasing on origin/main...${NC}\n"
+                if git rebase origin/main; then
+                    printf "\n${GREEN}Rebase succesvol voltooid!${NC}\n"
+                    read -p "Wil je direct een force push (--force-with-lease) uitvoeren? (y/n): " fpush_conf
+                    if [[ "$fpush_conf" == [Yy]* ]]; then
+                        printf "\n${CYAN}Pushing changes...${NC}\n"
+                        git push --force-with-lease origin "$CURRENT_BRANCH" && printf "${GREEN}Push successful!${NC}\n" || printf "${RED}Push failed!${NC}\n"
+                    fi
+                else
+                    printf "\n${RED}Rebase mislukt (conflicten). Los de conflicten op en gebruik 'git rebase --continue'.${NC}\n"
+                fi
+            fi
+            read -p "Enter..." junk ;;
+
+        34) # MILESTONE MERGE
+            [[ "$IN_GIT" = false ]] && continue
+            clear
+            printf "${CYAN}${BOLD}MILESTONE MERGE${NC}\n\n"
+            printf "${YELLOW}Info: Een Milestone Merge creëert bewust een merge commit in de historie.${NC}\n"
+            printf "Dit is handig voor grote mijlpalen, zodat je duidelijk ziet waar feature X is toegevoegd, "
+            printf "of wanneer een rebase te veel complexe conflicten oplevert.\n\n"
+
+            get_branch_list_raw "mm"
+            print_colored_branch_list "mm"
+            read -p "Selecteer branch om te mergen IN main: " mm_idx
+            [[ "$mm_idx" =~ ^[Xx]$ ]] && continue
 
             # Validate input
-            if [[ ! "$mf_idx" =~ ^[0-9]+$ ]]; then
+            if [[ ! "$mm_idx" =~ ^[0-9]+$ ]]; then
                  printf "${RED}Invalid input.${NC}\n"
                  read -p "Enter..." junk
                  continue
             fi
 
-            # Check range (avoid unbound variable crash)
-            if [[ -z "$(eval echo "\${mf_${mf_idx}:-}")" ]]; then
+            # Check range
+            if [[ -z "$(eval echo "\${mm_${mm_idx}:-}")" ]]; then
                 printf "${RED}Invalid selection.${NC}\n"
                 read -p "Enter..." junk
                 continue
             fi
 
-            fix_br=$(eval echo "\$mf_${mf_idx}")
-            fix_br="${fix_br#remotes/origin/}"
+            merge_br=$(eval echo "\$mm_${mm_idx}")
+            merge_br="${merge_br#remotes/origin/}"
 
-            if [[ -n "$fix_br" ]]; then
-                git merge "origin/$fix_br" --no-edit && git push origin "$CURRENT_BRANCH" || { printf "${RED}Error: Push failed.${NC}\n"; read -p "Enter..." junk; continue; } && git branch -D "$fix_br" 2>/dev/null
+            if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
+                printf "\n${YELLOW}Je huidige branch is '$CURRENT_BRANCH'. Voor een milestone merge schakelen we over naar 'main'.${NC}\n"
+                read -p "Doorgaan? (y/n): " mm_conf
+                [[ "$mm_conf" != [Yy]* ]] && { read -p "Enter..." junk; continue; }
+
+                # Check for unstaged changes
+                if ! check_dirty; then
+                    printf "${RED}Merge geannuleerd wegens onbewaarde wijzigingen.${NC}\n"
+                    read -p "Enter..." junk
+                    continue
+                fi
+
+                git checkout main && git pull origin main || { printf "${RED}Error: Checkout/Pull main failed.${NC}\n"; read -p "Enter..." junk; continue; }
+            fi
+
+            printf "\n${CYAN}Merging '$merge_br' in main met --no-ff...${NC}\n"
+            if git merge --no-ff "origin/$merge_br" -m "Merge branch '$merge_br' - Milestone complete"; then
+                 printf "\n${GREEN}Merge succesvol!${NC}\n"
+                 read -p "Wil je dit direct pushen naar origin? (y/n): " push_conf
+                 if [[ "$push_conf" == [Yy]* ]]; then
+                     git push origin main && printf "${GREEN}Push successful!${NC}\n" || printf "${RED}Push failed!${NC}\n"
+                 fi
+            else
+                 printf "\n${RED}Merge failed. Los de conflicten op.${NC}\n"
             fi
             read -p "Enter..." junk ;;
 
