@@ -22,6 +22,7 @@ central_dir="$(pwd)/00-CONVERTED"
 VERBOSE=false
 CLEAN=false
 OVERWRITE=false
+TARGETS=()
 
 # --- Argumenten verwerken ---
 while [[ $# -gt 0 ]]; do
@@ -29,10 +30,15 @@ while [[ $# -gt 0 ]]; do
         -v|--verbose) VERBOSE=true ;;
         --clean) CLEAN=true ;;
         -o|--overwrite) OVERWRITE=true ;;
-        *) echo "❌ Onbekende optie: $1"; exit 1 ;;
+        -*) echo "❌ Onbekende optie: $1"; exit 1 ;;
+        *) TARGETS+=("$1") ;;
     esac
     shift
 done
+
+if [ ${#TARGETS[@]} -eq 0 ]; then
+    TARGETS=(".")
+fi
 
 echo "=== MP4 naar 16:9 Converter ==="
 $VERBOSE && echo "🔧 Debugmodus ingeschakeld"
@@ -68,8 +74,8 @@ echo "🔍 Zoeken naar MP4 bestanden vanuit: $(pwd)"
 if $CLEAN; then
     echo "🧹 Uitvoeren auto-clean..."
     
-    find . -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-    find . -name '._*' -type f -size -10k -delete 2>/dev/null || true
+    find "${TARGETS[@]}" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+    find "${TARGETS[@]}" -name '._*' -type f -size -10k -delete 2>/dev/null || true
 
     while IFS= read -r -d '' file; do
         [[ ! -f "$file" ]] && continue
@@ -86,7 +92,7 @@ if $CLEAN; then
             newpath="$dir/$newbase"
             [[ ! -e "$newpath" ]] && mv -n "$file" "$newpath" 2>/dev/null || echo "   ⚠️  Kon niet hernoemen: $base"
         fi
-    done < <(find . -type f -print0 2>/dev/null)
+    done < <(find "${TARGETS[@]}" -type f -print0 2>/dev/null)
 
     echo "🧹 Auto-clean voltooid"
 fi
@@ -95,7 +101,7 @@ fi
 tmp_list="$(mktemp -t 16-9-list.XXXXXX 2>/dev/null || mktemp /tmp/16-9-list.XXXXXX)"
 trap 'rm -f "$tmp_list"' EXIT INT TERM
 
-find . -type f \( -iname "*.mp4" -o -iname "*.m4v" \) ! -name '._*' ! -name '.DS_Store' -print0 2>/dev/null > "$tmp_list"
+find "${TARGETS[@]}" -type f \( -iname "*.mp4" -o -iname "*.m4v" \) ! -name '._*' ! -name '.DS_Store' -print0 2>/dev/null > "$tmp_list"
 
 success=0
 failed=0
@@ -104,27 +110,27 @@ total_files=0
 # --- Bestanden verwerken ---
 while IFS= read -r -d '' file; do
     [[ -z "$file" ]] && continue
-    ((total_files++))
+    ((total_files++)) || true
     basefile="$(basename "$file")"
     echo "📹 Verwerken ($total_files): $basefile"
 
     # Bestandscontroles
     if [[ ! -f "$file" ]] || [[ ! -r "$file" ]]; then
         echo "   ❌ Bestand niet leesbaar of bestaat niet"
-        ((failed++))
+        ((failed++)) || true
         continue
     fi
 
     filesize=$(stat -f%z "$file" 2>/dev/null || wc -c <"$file" | tr -d ' ')
     if (( filesize < MIN_SIZE_BYTES )); then
         echo "   ⛔ Bestand te klein (${filesize} bytes)"
-        ((failed++))
+        ((failed++)) || true
         continue
     fi
 
     if ! ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 "$file" >/dev/null 2>&1; then
         echo "   ❌ Geen geldig video bestand"
-        ((failed++))
+        ((failed++)) || true
         continue
     fi
 
@@ -163,7 +169,7 @@ while IFS= read -r -d '' file; do
     # Backup maken bij overschrijven
     if $OVERWRITE; then
         # echo "   💾 Backup maken: $(basename "$backup_file")"
-        cp "$file" "$backup_file" 2>/dev/null || { echo "   ❌ Kon geen backup maken"; ((failed++)); continue; }
+        cp "$file" "$backup_file" 2>/dev/null || { echo "   ❌ Kon geen backup maken"; ((failed++)) || true; continue; }
     fi
 
     # Eerste poging: copy met aspect ratio
@@ -176,13 +182,13 @@ while IFS= read -r -d '' file; do
 
     if $copy_success; then
         if $OVERWRITE; then
-            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (metadata, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)); continue; }
+            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (metadata, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)) || true; continue; }
             rm -f "$backup_file" 2>/dev/null || true
         else
             mv -f "$tmp_output" "$output"
             echo "   ✅ Conversie succesvol (metadata)"
         fi
-        ((success++))
+        ((success++)) || true
         continue
     fi
 
@@ -196,16 +202,16 @@ while IFS= read -r -d '' file; do
         "$tmp_output" >/dev/null 2>&1 && [[ -s "$tmp_output" ]]; then
         
         if $OVERWRITE; then
-            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (re-encode, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)); continue; }
+            mv -f "$tmp_output" "$output" 2>/dev/null && echo "   ✅ Conversie succesvol (re-encode, origineel overschreven)" || { echo "   ❌ Kon origineel bestand niet vervangen"; mv -f "$backup_file" "$output" 2>/dev/null && echo "   🔄 Backup hersteld"; ((failed++)) || true; continue; }
             rm -f "$backup_file" 2>/dev/null || true
         else
             mv -f "$tmp_output" "$output"
             echo "   ✅ Conversie succesvol (re-encode)"
         fi
-        ((success++))
+        ((success++)) || true
     else
         echo "   ❌ Conversie mislukt"
-        ((failed++))
+        ((failed++)) || true
         rm -f "$tmp_output" 2>/dev/null || true
         $OVERWRITE && mv -f "$backup_file" "$output" 2>/dev/null || true
     fi
