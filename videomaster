@@ -972,10 +972,29 @@ while true; do
         5) check_dependencies && media_info ;;
         6) check_dependencies && extract_local_audio ;;
         7)
-            read -e -p "Geef directory op om te scannen [huidige map]: " target_dir
-            target_dir="${target_dir:-.}"
-            read -e -p "Extra argumenten voor 16-9-convert (bijv. --verbose --clean --overwrite): " extra_args
-            (cd "$target_dir" && "$SCRIPT_DIR/16-9-convert" $extra_args)
+            echo -e "\n${CYAN}Kies 16:9 conversie mode:${NC}"
+            echo "1) Scan een hele directory"
+            echo "2) Selecteer een specifiek bestand"
+            read -p "Keuze [1-2]: " conv_choice
+
+            if [ "$conv_choice" = "1" ]; then
+                read -e -p "Geef directory op om te scannen [huidige map]: " target_dir
+                target_dir="${target_dir:-.}"
+                read -e -p "Extra argumenten voor 16-9-convert (bijv. --verbose --clean --overwrite): " extra_args
+                (cd "$target_dir" && "$SCRIPT_DIR/16-9-convert" $extra_args)
+            elif [ "$conv_choice" = "2" ]; then
+                local_file=$(select_local_media_file)
+                if [ -n "$local_file" ] && [ -f "$local_file" ]; then
+                    read -e -p "Extra argumenten voor 16-9-convert (bijv. --verbose --clean --overwrite): " extra_args
+                    target_dir=$(dirname "$local_file")
+                    target_file=$(basename "$local_file")
+                    (cd "$target_dir" && "$SCRIPT_DIR/16-9-convert" $extra_args "$target_file")
+                else
+                    echo -e "${RED}Geen geldig bestand geselecteerd.${NC}"
+                fi
+            else
+                echo -e "${RED}Ongeldige keuze.${NC}"
+            fi
             pause
             ;;
         8)
