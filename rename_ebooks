@@ -1,0 +1,204 @@
+#!/bin/bash
+# =============================================================================
+# rename_ebooks.sh
+# Hernoemt e-books van "Achternaam, Voornaam - Titel.epub"
+# naar "Voornaam Achternaam - Titel.epub" met correcte Title Case.
+#
+# Gebruik:
+#   chmod +x rename_ebooks.sh
+#   ./rename_ebooks.sh /pad/naar/je/eboekmap
+#
+# Voeg --dry-run toe om alleen een preview te zien zonder te hernoemen:
+#   ./rename_ebooks.sh /pad/naar/je/eboekmap --dry-run
+# =============================================================================
+
+set -euo pipefail
+
+# --------------------------------------------------------------------------
+# Hulpfuncties
+# --------------------------------------------------------------------------
+
+# Title Case: maakt elk woord met hoofdletter, behalve voorzetsels/lidwoorden
+# tenzij het het eerste woord is.
+title_case() {
+    local input="$1"
+    # Lijst van woorden die klein blijven (tenzij eerste woord)
+    local lower_words="de het een van der den aan op in uit te bij tot en of maar voor naar over met als om door"
+
+    python3 - "$input" "$lower_words" <<'PYEOF'
+import sys, re
+
+text = sys.argv[1]
+lowers = set(sys.argv[2].split())
+
+def tc_word(i, word):
+    # Bewaar speciale tekens rondom het woord
+    m = re.match(r'^([^a-zA-Z0-9]*)([a-zA-Z0-9].*?)([^a-zA-Z0-9]*)$', word)
+    if not m:
+        return word
+    pre, core, post = m.groups()
+    if i == 0 or core.lower() not in lowers:
+        core = core[0].upper() + core[1:].lower() if len(core) > 1 else core.upper()
+    else:
+        core = core.lower()
+    return pre + core + post
+
+words = text.split()
+result = [tc_word(i, w) for i, w in enumerate(words)]
+print(' '.join(result))
+PYEOF
+}
+
+# Verwijder extra spaties en trim
+clean_spaces() {
+    echo "$1" | sed 's/  */ /g' | sed 's/^ *//;s/ *$//'
+}
+
+# --------------------------------------------------------------------------
+# Argumenten verwerken
+# --------------------------------------------------------------------------
+DRY_RUN=false
+FOLDER=""
+
+for arg in "$@"; do
+    if [[ "$arg" == "--dry-run" ]]; then
+        DRY_RUN=true
+    else
+        FOLDER="$arg"
+    fi
+done
+
+if [[ -z "$FOLDER" ]]; then
+    echo "Gebruik: $0 /pad/naar/map [--dry-run]"
+    exit 1
+fi
+
+if [[ ! -d "$FOLDER" ]]; then
+    echo "Fout: map '$FOLDER' bestaat niet."
+    exit 1
+fi
+
+if $DRY_RUN; then
+    echo "=== DRY RUN — geen bestanden worden hernoemd ==="
+fi
+
+# --------------------------------------------------------------------------
+# Hoofd­lus: verwerk elk .epub bestand
+# --------------------------------------------------------------------------
+count=0
+renamed=0
+
+while IFS= read -r -d '' filepath; do
+    filename="$(basename "$filepath")"
+    ext="${filename##*.}"
+    name="${filename%.*}"
+
+    ((count++)) || true
+
+    # ------------------------------------------------------------------
+    # Stap 1: splits op " - " om auteur en titel te scheiden
+    # Formaat: "Achternaam, Voornaam - Titel"
+    # of:      "Achternaam, Voornaam - Serienaam N - Titel"
+    # ------------------------------------------------------------------
+    if [[ "$name" == *" - "* ]]; then
+        author_raw="${name%% - *}"
+        title_raw="${name#* - }"
+    else
+        # Geen " - " separator: sla over of behandel als alleen auteur
+        echo "  [SKIP] Geen scheiding gevonden: $filename"
+        continue
+    fi
+
+    # ------------------------------------------------------------------
+    # Stap 2: normaliseer auteur
+    # Patronen:
+    #   "Achternaam, Voornaam"   → "Voornaam Achternaam"
+    #   "achternaam, voornaam"   → "Voornaam Achternaam"  (lowercase fix)
+    #   "Voornaam Achternaam"    → blijft (al correct formaat)
+    # ------------------------------------------------------------------
+    author_clean="$(clean_spaces "$author_raw")"
+
+    if [[ "$author_clean" == *","* ]]; then
+        # Formaat: "Achternaam, Voornaam"
+        last="${author_clean%%,*}"
+        first="${author_clean#*,}"
+        first="$(clean_spaces "$first")"
+        last="$(clean_spaces "$last")"
+        # Title case op beide delen
+        first_tc="$(title_case "$first")"
+        last_tc="$(title_case "$last")"
+        author_final="${first_tc} ${last_tc}"
+    else
+        # Al in formaat "Voornaam Achternaam" of enkel één naam
+        author_final="$(title_case "$author_clean")"
+    fi
+
+    # ------------------------------------------------------------------
+    # Stap 3: normaliseer titel
+    # Soms staat een lidwoord achteraan: "satijnen hart, Het"
+    # → "Het satijnen hart"
+    # ------------------------------------------------------------------
+    title_clean="$(clean_spaces "$title_raw")"
+
+    # Detecteer patroon "woorden, Lidwoord" aan het einde
+    # Lidwoorden die achteraan kunnen staan: De, Het, Een, The, A, An, Le, La, Les
+    lidwoorden="De|Het|Een|The|A|An|Le|La|Les|Der|Das|Ein|Une"
+
+    if echo "$title_clean" | grep -qE ",\s*(${lidwoorden})$"; then
+        # Haal het lidwoord op
+        article="$(echo "$title_clean" | sed -E "s/^.*,\s*(${lidwoorden})$/\1/")"
+        rest="$(echo "$title_clean" | sed -E "s/,\s*(${lidwoorden})$//" | sed 's/ *$//')"
+        title_clean="${article} ${rest}"
+    fi
+
+    title_final="$(title_case "$title_clean")"
+
+    # ------------------------------------------------------------------
+    # Stap 4: bouw nieuwe bestandsnaam
+    # ------------------------------------------------------------------
+    new_name="${author_final} - ${title_final}.${ext}"
+
+    # Vervang tekens die problemen geven op macOS (optioneel: pas aan)
+    # macOS HFS+ staat de meeste tekens toe, maar ':' is verboden
+    new_name="${new_name//:/;}"
+
+    # Underscores: verwijder aan het einde (voor de extensie), vervang middenin door spatie
+    base_part="${new_name%.*}"
+    ext_part="${new_name##*.}"
+    base_part="${base_part//_/ }"   # vervang alle _ door spatie
+    base_part="$(clean_spaces "$base_part")"  # ruim dubbele spaties op
+    base_part="${base_part% }"      # trim eventuele spatie aan het einde
+    new_name="${base_part}.${ext_part}"
+
+    if [[ "$filename" == "$new_name" ]]; then
+        echo "  [OK]   $filename  →  (ongewijzigd)"
+        continue
+    fi
+
+    echo "  [HER]  $filename"
+    echo "       → $new_name"
+
+    if ! $DRY_RUN; then
+        dir="$(dirname "$filepath")"
+        # Controleer of doelbestand al bestaat
+        if [[ -e "${dir}/${new_name}" ]]; then
+            echo "  [WAARSCHUWING] Doelbestand bestaat al, sla over: ${new_name}"
+        else
+            mv -- "$filepath" "${dir}/${new_name}"
+            ((renamed++)) || true
+        fi
+    fi
+
+done < <(find "$FOLDER" -name "*.epub" -print0 | sort -z)
+
+# --------------------------------------------------------------------------
+# Samenvatting
+# --------------------------------------------------------------------------
+echo ""
+echo "=== Klaar ==="
+echo "  Totaal gevonden : $count"
+if $DRY_RUN; then
+    echo "  (Dry run — geen bestanden hernoemd)"
+else
+    echo "  Hernoemd        : $renamed"
+fi

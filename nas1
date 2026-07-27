@@ -1,0 +1,5 @@
+#!/bin/bash
+
+  echo "Verbinden met $host..."
+
+  ssh -tt "admin:blysy-99@192.168.0.220" 
