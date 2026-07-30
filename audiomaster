@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# Zorg dat autocomplete het scherm niet overvol maakt door het te wissen bij tab
-set -o emacs
-bind '"\t": "\C-l\e\e"' 2>/dev/null || true
-
-
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "=========================================="
     echo "Usage: $0 [options]"
@@ -13,6 +8,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "Beschikbare tools in dit menu:"
     echo -e "  1) fixaac"
     echo -e "  2) mp3tag_manager"
+    echo -e "  3) convert_audio"
     echo ""
     echo "Gebruik zonder argumenten om het interactieve menu te starten."
     echo "=========================================="
@@ -43,10 +39,11 @@ while true; do
     echo -e "${GREEN}Available tools:${NC}"
     echo "1) fixaac"
     echo "2) mp3tag_manager"
+    echo "3) convert_audio"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
-    read -p "Select action: " choice
+    read -e -p "Select action: " choice
 
     case "$choice" in
         1)
@@ -57,6 +54,9 @@ while true; do
             ;;
         2)
             "$AUDIO_DIR/mp3tag_manager.sh"
+            ;;
+        3)
+            "$AUDIO_DIR/convert_audio.sh"
             ;;
         [xX])
             echo -e "${GREEN}Exiting...${NC}"
