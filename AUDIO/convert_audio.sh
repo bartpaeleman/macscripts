@@ -45,6 +45,12 @@ convert_file() {
 
     dir=$(dirname "$file")
     filename=$(basename "$file")
+
+    # Skip hidden/macOS system files
+    if [[ "$filename" == ".DS_Store" || "$filename" == ._* ]]; then
+        return
+    fi
+
     base="${filename%.*}"
 
     local out_file="$dir/$base.$target_ext"
@@ -56,7 +62,9 @@ convert_file() {
     fi
 
     echo -e "${CYAN}Converting: $filename -> $base.$target_ext${NC}"
-    ffmpeg -v error -y -i "$file" "$out_file" < /dev/null
+    # Use -fflags +genpts to fix dts/pts issues, and -vn to drop video streams (like cover art)
+    # which can interfere with audio-only containers like mp3
+    ffmpeg -v error -y -fflags +genpts -i "$file" -vn "$out_file" < /dev/null
 }
 
 while true; do
