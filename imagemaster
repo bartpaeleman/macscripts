@@ -1,0 +1,321 @@
+#!/bin/bash
+
+# Ensure autocomplete doesn't clutter the screen by clearing it on tab
+set -o emacs
+bind '"\t": "\C-l\e\e"' 2>/dev/null || true
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "=========================================="
+    echo "Usage: $0 [options]"
+    echo "This is a master wrapper script."
+    echo ""
+    echo "Available tools in this menu:"
+    echo -e "Image Master\n  1) Convert Image(s)\n  2) Update Dependencies"
+    echo ""
+    echo "Run without arguments to start the interactive menu."
+    echo "=========================================="
+    exit 0
+fi
+
+# Interactive scripts should generally avoid set -e to prevent menu crashes
+set -u
+
+# Colors
+GREEN='\033[1;32m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/IMAGE" && pwd)"
+
+pause() {
+    echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+    read -r
+}
+
+check_dependencies() {
+    local missing=0
+
+    if ! command -v magick &> /dev/null && ! command -v convert &> /dev/null; then
+        echo -e "${RED}Error: ImageMagick (magick) is not installed.${NC}"
+        missing=1
+    fi
+
+    if [ $missing -eq 1 ]; then
+        echo -e "\n${YELLOW}Attempting to install missing dependencies...${NC}"
+        if command -v brew &> /dev/null; then
+            echo -e "${CYAN}Mac (Homebrew) detected. Installing ImageMagick...${NC}"
+            brew install imagemagick
+        elif command -v apt &> /dev/null; then
+            echo -e "${CYAN}Linux (APT) detected. Installing ImageMagick...${NC}"
+            sudo apt update && sudo apt install -y imagemagick
+        else
+            echo -e "${RED}Could not determine package manager automatically. Please install ImageMagick manually.${NC}"
+            pause
+            return 1
+        fi
+
+        if ! command -v magick &> /dev/null && ! command -v convert &> /dev/null; then
+            echo -e "${RED}Failed to install ImageMagick. Please install manually.${NC}"
+            pause
+            return 1
+        fi
+    fi
+    return 0
+}
+
+update_dependencies() {
+    echo -e "\n${CYAN}🔄 Updating dependencies (ImageMagick)...${NC}"
+    if command -v brew &> /dev/null; then
+        brew upgrade imagemagick
+    elif command -v apt &> /dev/null; then
+        sudo apt update && sudo apt install --only-upgrade -y imagemagick
+    else
+        echo -e "${RED}Could not determine package manager automatically.${NC}"
+    fi
+    echo -e "\n${GREEN}✅ Update process completed!${NC}"
+    pause
+}
+
+# Cleanup path from drag and drop
+clean_path() {
+    local p="$1"
+    # Remove trailing spaces
+    p="${p%"${p##*[![:space:]]}"}"
+    # Remove surrounding single quotes
+    if [[ "$p" == \'*\' ]]; then
+        p="${p#\'}"
+        p="${p%\'}"
+    fi
+    # Remove surrounding double quotes
+    if [[ "$p" == \"*\" ]]; then
+        p="${p#\"}"
+        p="${p%\"}"
+    fi
+    # Unescape literal spaces
+    p="${p//\\ / }"
+    echo "$p"
+}
+
+# Fallback for read -i
+read_input() {
+    local prompt="$1"
+    local default_val="$2"
+    local var_name="$3"
+    local val=""
+
+    if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
+        read -e -i "$default_val" -p "$prompt: " val
+    else
+        read -e -p "$prompt [$default_val]: " val
+        if [ -z "$val" ]; then
+            val="$default_val"
+        fi
+    fi
+    eval "$var_name=\"\$val\""
+}
+
+convert_images() {
+    local m_source=""
+    local m_format="JPG"
+    local m_size="Original"
+    local m_colorspace="sRGB"
+    local m_bitdepth="8"
+    local m_transparency="Keep"
+    local m_outdir="$HOME/Downloads/CONVERTED"
+
+    while true; do
+        clear
+        echo -e "${CYAN}===================================${NC}"
+        echo -e "      ${CYAN}IMAGE CONVERSION CONFIGURATOR${NC}"
+        echo -e "${CYAN}===================================${NC}"
+
+        echo -e "${YELLOW}Current Settings:${NC}"
+        if [ -z "$m_source" ]; then
+            echo -e " 1) Source (File/Folder) : ${RED}[Not Set]${NC}"
+        else
+            echo -e " 1) Source (File/Folder) : ${GREEN}${m_source}${NC}"
+        fi
+        echo -e " 2) Target Format        : ${GREEN}${m_format}${NC} (JPG, PNG, GIF, HEIC, TIF, SVG, PDF)"
+        echo -e " 3) Target Size          : ${GREEN}${m_size}${NC} (e.g. Original, 1920x1080, 50%)"
+        echo -e " 4) Color Space          : ${GREEN}${m_colorspace}${NC} (RGB, sRGB, Grayscale)"
+        echo -e " 5) Bit Depth            : ${GREEN}${m_bitdepth}${NC} (8, 16, 24)"
+        echo -e " 6) Transparency         : ${GREEN}${m_transparency}${NC} (Keep, Remove)"
+        echo -e " 7) Output Directory     : ${GREEN}${m_outdir}${NC}"
+        echo -e "-----------------------------------"
+        echo -e " ${GREEN}9) START CONVERSION${NC}"
+        echo -e " 0) Back to Main Menu"
+        echo ""
+
+        read -p "Choose an option to edit or Start (9): " choice
+
+        case ${choice:-} in
+            1)
+                read -e -p "Drag & drop or enter path for File/Folder: " raw_path
+                m_source="$(clean_path "$raw_path")"
+                ;;
+            2)
+                read_input "Enter target format (JPG, PNG, GIF, HEIC, TIF, SVG, PDF)" "$m_format" "m_format"
+                # uppercase it
+                m_format=$(echo "$m_format" | tr '[:lower:]' '[:upper:]')
+                ;;
+            3)
+                read_input "Enter target size (Original, 1920x1080, 50%, etc.)" "$m_size" "m_size"
+                ;;
+            4)
+                echo -e "Options: RGB, sRGB, Grayscale"
+                read_input "Enter color space" "$m_colorspace" "m_colorspace"
+                ;;
+            5)
+                echo -e "Options: 8, 16, 24"
+                read_input "Enter bit depth" "$m_bitdepth" "m_bitdepth"
+                ;;
+            6)
+                echo -e "Options: Keep, Remove"
+                read_input "Transparency" "$m_transparency" "m_transparency"
+                ;;
+            7)
+                read -e -p "Drag & drop or enter Output Directory [$m_outdir]: " raw_out
+                if [ -n "$raw_out" ]; then
+                    m_outdir="$(clean_path "$raw_out")"
+                fi
+                ;;
+            9)
+                if [ -z "$m_source" ] || [ ! -e "$m_source" ]; then
+                    echo -e "${RED}❌ Invalid or missing source path!${NC}"
+                    sleep 2
+                else
+                    execute_conversion "$m_source" "$m_format" "$m_size" "$m_colorspace" "$m_bitdepth" "$m_transparency" "$m_outdir"
+                    pause
+                fi
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo -e "${RED}Invalid choice.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+execute_conversion() {
+    local src="$1"
+    local fmt="$2"
+    local size="$3"
+    local colorspace="$4"
+    local bitdepth="$5"
+    local trans="$6"
+    local outdir="$7"
+
+    mkdir -p "$outdir"
+
+    # Determine command
+    local cmd="magick"
+    if ! command -v magick &> /dev/null; then
+        cmd="convert"
+    fi
+
+    local files=()
+    if [ -d "$src" ]; then
+        # Load files safely
+        while IFS= read -r -d $'\0' file; do
+            local fname="$(basename "$file")"
+            # Ignore hidden files like .DS_Store
+            if [[ "$fname" == .* ]]; then
+                continue
+            fi
+            files+=("$file")
+        done < <(find "$src" -maxdepth 1 -type f -print0)
+    elif [ -f "$src" ]; then
+        files+=("$src")
+    else
+        echo -e "${RED}Source is neither a file nor a directory!${NC}"
+        return
+    fi
+
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No files found to convert.${NC}"
+        return
+    fi
+
+    echo -e "\n${CYAN}Starting conversion of ${#files[@]} file(s)...${NC}"
+
+    local success_count=0
+    local fail_count=0
+
+    for file in "${files[@]}"; do
+        local bname="$(basename "$file")"
+        local name_no_ext="${bname%.*}"
+        local lower_fmt="$(echo "$fmt" | tr '[:upper:]' '[:lower:]')"
+
+        local out_file="$outdir/${name_no_ext}.${lower_fmt}"
+
+        # Resolve filename conflict
+        local counter=1
+        while [ -f "$out_file" ]; then
+            out_file="$outdir/${name_no_ext}-${counter}.${lower_fmt}"
+            ((counter++)) || true
+        done
+
+        local args=("$file")
+
+        # Build image magick arguments
+        if [ "$size" != "Original" ] && [ -n "$size" ]; then
+            args+=("-resize" "$size")
+        fi
+
+        if [ -n "$colorspace" ]; then
+            if [[ "$colorspace" =~ ^[Gg]rayscale$ ]]; then
+                args+=("-colorspace" "Gray")
+            else
+                args+=("-colorspace" "$colorspace")
+            fi
+        fi
+
+        if [ -n "$bitdepth" ]; then
+            args+=("-depth" "$bitdepth")
+        fi
+
+        if [[ "$trans" =~ ^[Rr]emove$ ]]; then
+            args+=("-background" "white" "-alpha" "remove" "-alpha" "off")
+        fi
+
+        args+=("$out_file")
+
+        echo -e "Converting: ${YELLOW}$bname${NC} -> ${GREEN}$(basename "$out_file")${NC}"
+
+        if "$cmd" "${args[@]}"; then
+            ((success_count++)) || true
+        else
+            echo -e "${RED}Failed to convert $bname${NC}"
+            ((fail_count++)) || true
+        fi
+    done
+
+    echo -e "\n${GREEN}✅ Conversion finished!${NC}"
+    echo -e "Success: $success_count | Failed: $fail_count"
+}
+
+# --- MAIN MENU ---
+while true; do
+    clear
+    echo -e "${CYAN}===================================${NC}"
+    echo -e "      ${CYAN}IMAGE MASTER CONTROL${NC}"
+    echo -e "${CYAN}===================================${NC}"
+    echo "1) Convert Image(s) (Format, Resize, Color)"
+    echo "2) Update Dependencies (ImageMagick)"
+    echo -e "-----------------------------------"
+    echo "X) Exit"
+    echo ""
+
+    read -p "Make your choice: " choice
+    case ${choice:-} in
+        1) check_dependencies && convert_images ;;
+        2) update_dependencies ;;
+        [xX]) clear; exit 0 ;;
+        *) echo -e "${RED}Invalid choice.${NC}" ; pause ;;
+    esac
+done
