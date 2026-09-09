@@ -56,6 +56,10 @@ launch_text() {
     bash "$ROOT_DIR/textmaster"
 }
 
+launch_image() {
+    bash "$ROOT_DIR/imagemaster"
+}
+
 launch_video() {
     bash "$ROOT_DIR/videomaster"
 }
@@ -156,12 +160,13 @@ while true; do
     echo "7) File Master      (Rename, Archive, Cleanup)"
     echo "8) Folder Master    (Directory Tools)"
     echo "9) Text Master      (Stats, Diff, Merge)"
-    echo "10) Video Master    (Download & Clip Videos)"
-    echo "11) Intel Master    (Threat Intelligence Menu)"
-    echo "12) Cyber Master    (Phishing & Recon Tools)"
-    echo "13) Audio Master    (Audio Tools)"
-    echo "14) Karaoke Master  (Karaoke Tools)"
-    echo "15) Mac Master      (Mac System Tools)"
+    echo "10) Image Master    (Image Conversion)"
+    echo "11) Video Master    (Download & Clip Videos)"
+    echo "12) Intel Master    (Threat Intelligence Menu)"
+    echo "13) Cyber Master    (Phishing & Recon Tools)"
+    echo "14) Audio Master    (Audio Tools)"
+    echo "15) Karaoke Master  (Karaoke Tools)"
+    echo "16) Mac Master      (Mac System Tools)"
     echo -e "-----------------------------------"
     echo "X) Exit"
 
@@ -176,12 +181,13 @@ while true; do
         7) launch_file ;;
         8) launch_folder ;;
         9) launch_text ;;
-        10) launch_video ;;
-        11) launch_intel ;;
-        12) launch_cyber ;;
-        13) launch_audio ;;
-        14) launch_karaoke ;;
-        15) launch_mac ;;
+        10) launch_image ;;
+        11) launch_video ;;
+        12) launch_intel ;;
+        13) launch_cyber ;;
+        14) launch_audio ;;
+        15) launch_karaoke ;;
+        16) launch_mac ;;
         [xX]) clear; exit 0 ;;
         *) echo "Invalid option." ; pause ;;
     esac

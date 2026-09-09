@@ -62,9 +62,11 @@ convert_file() {
     fi
 
     echo -e "${CYAN}Converting: $filename -> $base.$target_ext${NC}"
-    # Use -fflags +genpts to fix dts/pts issues, and -vn to drop video streams (like cover art)
-    # which can interfere with audio-only containers like mp3
-    ffmpeg -v error -y -fflags +genpts -i "$file" -vn "$out_file" < /dev/null
+    # Use -fflags +genpts to fix basic muxing issues.
+    # Use -vn to drop video streams (like cover art) and -map 0:a? to explicitly select only audio.
+    # Use -af "asetpts=N/SR/TB" to completely rewrite audio timestamps sequentially, which prevents
+    # "non monotonically increasing dts to muxer" errors when processing corrupt or irregular source files.
+    ffmpeg -v error -y -fflags +genpts -i "$file" -vn -map 0:a? -af "asetpts=N/SR/TB" "$out_file" < /dev/null
 }
 
 while true; do
