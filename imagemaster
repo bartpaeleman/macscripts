@@ -148,7 +148,11 @@ convert_images() {
         echo -e " 0) Back to Main Menu"
         echo ""
 
-        read -p "Choose an option to edit or Start (9): " choice
+        read -p "Choose an option to edit or Start (9) [ENTER=Start]: " choice
+
+        if [ -z "$choice" ]; then
+            choice="9"
+        fi
 
         case ${choice:-} in
             1)
