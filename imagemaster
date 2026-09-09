@@ -27,7 +27,7 @@ YELLOW='\033[1;33m'
 RED='\033[1;31m'
 NC='\033[0m'
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/IMAGE" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 pause() {
     echo -e "\n${YELLOW}Press Enter to continue...${NC}"
@@ -255,7 +255,7 @@ execute_conversion() {
 
         # Resolve filename conflict
         local counter=1
-        while [ -f "$out_file" ]; then
+        while [ -f "$out_file" ]; do
             out_file="$outdir/${name_no_ext}-${counter}.${lower_fmt}"
             ((counter++)) || true
         done
