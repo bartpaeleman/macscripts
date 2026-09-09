@@ -83,18 +83,23 @@ clean_path() {
     local p="$1"
     # Remove trailing spaces
     p="${p%"${p##*[![:space:]]}"}"
-    # Remove surrounding single quotes
-    if [[ "$p" == \'*\' ]]; then
+
+    # If the user dragged multiple files, it's typically space-separated strings.
+    # To properly support this without breaking single files, we keep the raw string
+    # and we will parse it in execute_conversion via eval or similar logic to handle quotes/escapes.
+    # We will still strip outer quotes if it's a single quoted string.
+
+    # Remove surrounding single quotes if it wraps the *entire* string (not multiple)
+    if [[ "$p" == \'*\' ]] && [[ ! "$p" =~ \'\ \' ]]; then
         p="${p#\'}"
         p="${p%\'}"
     fi
-    # Remove surrounding double quotes
-    if [[ "$p" == \"*\" ]]; then
+    # Remove surrounding double quotes if it wraps the *entire* string
+    if [[ "$p" == \"*\" ]] && [[ ! "$p" =~ \"\ \" ]]; then
         p="${p#\"}"
         p="${p%\"}"
     fi
-    # Unescape literal spaces
-    p="${p//\\ / }"
+
     echo "$p"
 }
 
@@ -113,7 +118,7 @@ read_input() {
             val="$default_val"
         fi
     fi
-    eval "$var_name=\"\$val\""
+    printf -v "$var_name" "%s" "$val"
 }
 
 convert_images() {
@@ -133,9 +138,9 @@ convert_images() {
 
         echo -e "${YELLOW}Current Settings:${NC}"
         if [ -z "$m_source" ]; then
-            echo -e " 1) Source (File/Folder) : ${RED}[Not Set]${NC}"
+            echo -e " 1) Source               : ${RED}[Not Set]${NC}"
         else
-            echo -e " 1) Source (File/Folder) : ${GREEN}${m_source}${NC}"
+            echo -e " 1) Source               : ${GREEN}${m_source}${NC}"
         fi
         echo -e " 2) Target Format        : ${GREEN}${m_format}${NC} (JPG, PNG, GIF, HEIC, TIF, SVG, PDF)"
         echo -e " 3) Target Size          : ${GREEN}${m_size}${NC} (e.g. Original, 1920x1080, 50%)"
@@ -146,6 +151,7 @@ convert_images() {
         echo -e "-----------------------------------"
         echo -e " ${GREEN}9) START CONVERSION${NC}"
         echo -e " 0) Back to Main Menu"
+        echo -e " X) Exit"
         echo ""
 
         read -p "Choose an option to edit or Start (9) [ENTER=Start]: " choice
@@ -186,8 +192,8 @@ convert_images() {
                 fi
                 ;;
             9)
-                if [ -z "$m_source" ] || [ ! -e "$m_source" ]; then
-                    echo -e "${RED}❌ Invalid or missing source path!${NC}"
+                if [ -z "$m_source" ]; then
+                    echo -e "${RED}❌ No source path provided!${NC}"
                     sleep 2
                 else
                     execute_conversion "$m_source" "$m_format" "$m_size" "$m_colorspace" "$m_bitdepth" "$m_transparency" "$m_outdir"
@@ -196,6 +202,10 @@ convert_images() {
                 ;;
             0)
                 break
+                ;;
+            [xX])
+                clear
+                exit 0
                 ;;
             *)
                 echo -e "${RED}Invalid choice.${NC}"
@@ -206,7 +216,7 @@ convert_images() {
 }
 
 execute_conversion() {
-    local src="$1"
+    local src_raw="$1"
     local fmt="$2"
     local size="$3"
     local colorspace="$4"
@@ -222,23 +232,32 @@ execute_conversion() {
         cmd="convert"
     fi
 
+    # Parse potentially multiple files/folders safely using xargs
+    local parsed_sources=()
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            parsed_sources+=("$line")
+        fi
+    done < <(echo "$src_raw" | xargs -n 1 echo)
+
     local files=()
-    if [ -d "$src" ]; then
-        # Load files safely
-        while IFS= read -r -d $'\0' file; do
-            local fname="$(basename "$file")"
-            # Ignore hidden files like .DS_Store
-            if [[ "$fname" == .* ]]; then
-                continue
-            fi
-            files+=("$file")
-        done < <(find "$src" -maxdepth 1 -type f -print0)
-    elif [ -f "$src" ]; then
-        files+=("$src")
-    else
-        echo -e "${RED}Source is neither a file nor a directory!${NC}"
-        return
-    fi
+    for src in "${parsed_sources[@]}"; do
+        if [ -d "$src" ]; then
+            # Load files safely
+            while IFS= read -r -d $'\0' file; do
+                local fname="$(basename "$file")"
+                # Ignore hidden files like .DS_Store
+                if [[ "$fname" == .* ]]; then
+                    continue
+                fi
+                files+=("$file")
+            done < <(find "$src" -maxdepth 1 -type f -print0)
+        elif [ -f "$src" ]; then
+            files+=("$src")
+        else
+            echo -e "${YELLOW}Warning: Source not found or invalid: $src${NC}"
+        fi
+    done
 
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${YELLOW}No files found to convert.${NC}"
