@@ -22,6 +22,7 @@ while true; do
     echo "3) Auto Cleanup"
     echo "4) Clear Cache"
     echo "5) Verwijder Applicatie"
+    echo "6) Network Sweep"
     echo -e "\n${YELLOW}X) Exit${NC}"
     echo -e "${CYAN}================================================${NC}"
 
@@ -33,6 +34,16 @@ while true; do
         3) "$MACSYSTEM_DIR/auto_cleanup.sh" ;;
         4) "$MACSYSTEM_DIR/clear_cache.sh" ;;
         5) "$MACSYSTEM_DIR/uninstall.sh" ;;
+        6)
+            if [[ -x "$MACSYSTEM_DIR/../NETWORK/sweep.sh" ]]; then
+                "$MACSYSTEM_DIR/../NETWORK/sweep.sh"
+                echo -e "\n${YELLOW}Press Enter to return to Mac System menu...${NC}"
+                read -r
+            else
+                echo -e "${RED}Error: sweep.sh not found or not executable at $MACSYSTEM_DIR/../NETWORK/sweep.sh${NC}"
+                sleep 2
+            fi
+            ;;
         [xX])
             echo -e "${GREEN}Exiting...${NC}"
             clear

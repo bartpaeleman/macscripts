@@ -260,6 +260,7 @@ menu_python() {
 menu_sweep() {
     local opt_subnet=""
     local opt_output="screen"
+    local opt_outfile=""
     local opt_show_all=0
     local opt_vendor=0
     local opt_update_db=0
@@ -268,7 +269,13 @@ menu_sweep() {
         clear
         echo -e "${CYAN}${BOLD}=== Network Sweep (sweep.sh) ===${NC}"
         echo "1) Subnet          : ${opt_subnet:-[Auto-detect]}"
-        echo "2) Output Format   : $opt_output"
+
+        if [[ "$opt_output" == "csv" ]]; then
+            echo "2) Output Format   : csv (File: ${opt_outfile:-[Auto-generated timestamp]})"
+        else
+            echo "2) Output Format   : screen"
+        fi
+
         if [[ $opt_show_all -eq 1 ]]; then
             echo "3) Show All IPs    : Yes (254 addresses)"
         else
@@ -297,8 +304,15 @@ menu_sweep() {
             2)
                 if [[ "$opt_output" == "screen" ]]; then
                     opt_output="csv"
+                    echo -e "\n${YELLOW}CSV output selected.${NC}"
+                    if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
+                        read -e -p "Enter custom output filepath (or press Enter for default): " opt_outfile
+                    else
+                        read -p "Enter custom output filepath [default]: " opt_outfile
+                    fi
                 else
                     opt_output="screen"
+                    opt_outfile=""
                 fi
                 ;;
             3)
@@ -316,6 +330,9 @@ menu_sweep() {
                     cmd+=("-s" "$opt_subnet")
                 fi
                 cmd+=("-o" "$opt_output")
+                if [[ "$opt_output" == "csv" && -n "$opt_outfile" ]]; then
+                    cmd+=("-f" "$opt_outfile")
+                fi
                 if [[ $opt_show_all -eq 1 ]]; then
                     cmd+=("-a")
                 fi
