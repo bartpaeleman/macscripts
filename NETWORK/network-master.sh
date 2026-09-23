@@ -353,6 +353,11 @@ menu_sweep() {
     done
 }
 
+if [[ "${1:-}" == "--sweep" ]]; then
+    menu_sweep
+    exit 0
+fi
+
 # --- MAIN LOOP ---
 
 while true; do
