@@ -35,12 +35,10 @@ while true; do
         4) "$MACSYSTEM_DIR/clear_cache.sh" ;;
         5) "$MACSYSTEM_DIR/uninstall.sh" ;;
         6)
-            if [[ -x "$MACSYSTEM_DIR/../NETWORK/sweep.sh" ]]; then
-                "$MACSYSTEM_DIR/../NETWORK/sweep.sh"
-                echo -e "\n${YELLOW}Press Enter to return to Mac System menu...${NC}"
-                read -r
+            if [[ -x "$MACSYSTEM_DIR/../NETWORK/network-master.sh" ]]; then
+                "$MACSYSTEM_DIR/../NETWORK/network-master.sh" --sweep
             else
-                echo -e "${RED}Error: sweep.sh not found or not executable at $MACSYSTEM_DIR/../NETWORK/sweep.sh${NC}"
+                echo -e "${RED}Error: network-master.sh not found or not executable at $MACSYSTEM_DIR/../NETWORK/network-master.sh${NC}"
                 sleep 2
             fi
             ;;
