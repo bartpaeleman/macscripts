@@ -256,6 +256,86 @@ menu_python() {
     done
 }
 
+# --- SUBMENU: NETWORK SWEEP ---
+menu_sweep() {
+    local opt_subnet=""
+    local opt_output="screen"
+    local opt_show_all=0
+    local opt_vendor=0
+    local opt_update_db=0
+
+    while true; do
+        clear
+        echo -e "${CYAN}${BOLD}=== Network Sweep (sweep.sh) ===${NC}"
+        echo "1) Subnet          : ${opt_subnet:-[Auto-detect]}"
+        echo "2) Output Format   : $opt_output"
+        if [[ $opt_show_all -eq 1 ]]; then
+            echo "3) Show All IPs    : Yes (254 addresses)"
+        else
+            echo "3) Show All IPs    : No (Active only)"
+        fi
+        if [[ $opt_vendor -eq 1 ]]; then
+            echo "4) Vendor Lookup   : Yes"
+        else
+            echo "4) Vendor Lookup   : No"
+        fi
+        if [[ $opt_update_db -eq 1 ]]; then
+            echo "5) Update OUI DB   : Yes"
+        else
+            echo "5) Update OUI DB   : No"
+        fi
+        echo -e "---------------------------------------------------------------"
+        echo "Press Enter to Start Sweep"
+        echo "0) Back"
+
+        read -p "Select action: " choice
+        case "$choice" in
+            1)
+                read -p "Enter Subnet (e.g. 192.168.1.0/24 or empty for auto): " new_subnet
+                opt_subnet="$new_subnet"
+                ;;
+            2)
+                if [[ "$opt_output" == "screen" ]]; then
+                    opt_output="csv"
+                else
+                    opt_output="screen"
+                fi
+                ;;
+            3)
+                opt_show_all=$((1 - opt_show_all))
+                ;;
+            4)
+                opt_vendor=$((1 - opt_vendor))
+                ;;
+            5)
+                opt_update_db=$((1 - opt_update_db))
+                ;;
+            "")
+                local cmd=("${SCRIPT_DIR}/sweep.sh")
+                if [[ -n "$opt_subnet" ]]; then
+                    cmd+=("-s" "$opt_subnet")
+                fi
+                cmd+=("-o" "$opt_output")
+                if [[ $opt_show_all -eq 1 ]]; then
+                    cmd+=("-a")
+                fi
+                if [[ $opt_vendor -eq 1 ]]; then
+                    cmd+=("-v")
+                fi
+                if [[ $opt_update_db -eq 1 ]]; then
+                    cmd+=("-u")
+                fi
+
+                echo -e "\n${CYAN}Starting sweep...${NC}"
+                "${cmd[@]}"
+                pause
+                ;;
+            [0]) return ;;
+            *) sleep 0.1 ;;
+        esac
+    done
+}
+
 # --- MAIN LOOP ---
 
 while true; do
@@ -270,6 +350,7 @@ while true; do
     echo " 5) Web Tools (curl, wget)"
     echo " 6) Advanced / Python Tools"
     echo " 7) GeoTrace (traceroute with GeoIP)"
+    echo " 8) Network Sweep (sweep.sh)"
     echo -e "---------------------------------------------------------------"
     echo " X) Exit"
     echo -e "${BOLD}===============================================================${NC}"
@@ -284,6 +365,7 @@ while true; do
         5) menu_web ;;
         6) menu_python ;;
         7) run_geotrace ;;
+        8) menu_sweep ;;
         [xX]) clear; exit 0 ;;
         *) sleep 0.1 ;;
     esac
